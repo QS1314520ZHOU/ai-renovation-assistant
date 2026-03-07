@@ -1,0 +1,250 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Button, ProgressBar, DatePicker, Toast, Dialog, Tag } from 'antd-mobile';
+import { useConstructionStore, useProjectStore } from '@/store';
+import { PHASE_LIST } from '@/engine/constructionData';
+import { formatMoney } from '@/utils/format';
+import dayjs from 'dayjs';
+
+export default function Construction() {
+    const navigate = useNavigate();
+    const { project, initProject, setPhase, completePhase, getPhaseProgress, getTotalSpent } = useConstructionStore();
+    const { currentHouse } = useProjectStore();
+    const [showDatePicker, setShowDatePicker] = useState(false);
+
+    // 未初始化 → 显示开工引导
+    if (!project) {
+        return (
+            <div style={{ background: 'var(--color-bg)', minHeight: '100vh', paddingBottom: 80 }}>
+                <div style={{ padding: '16px', background: '#fff', borderBottom: '1px solid var(--color-border)' }}>
+                    <h1 style={{ fontSize: 18, fontWeight: 600 }}>施工陪跑</h1>
+                </div>
+                <div style={{ padding: '60px 24px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 64, marginBottom: 20 }}>🏗️</div>
+                    <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>准备开工了？</h2>
+                    <p style={{ fontSize: 14, color: 'var(--color-text-secondary)', lineHeight: 1.6, marginBottom: 32 }}>
+                        设置开工日期后，系统会自动生成施工时间线、采购提醒和各阶段验收清单，帮你全程跟进装修进度。
+                    </p>
+                    <Button color="primary" size="large" shape="rounded" onClick={() => setShowDatePicker(true)}
+                        style={{ width: '80%', height: 48, fontWeight: 600 }}>
+                        📅 设置开工日期
+                    </Button>
+                    <DatePicker
+                        visible={showDatePicker}
+                        onClose={() => setShowDatePicker(false)}
+                        onConfirm={val => {
+                            const dateStr = dayjs(val).format('YYYY-MM-DD');
+                            initProject(currentHouse?.id || 'default', dateStr);
+                            Toast.show({ content: '施工项目已创建！', icon: 'success' });
+                            setShowDatePicker(false);
+                        }}
+                        min={new Date(2024, 0, 1)}
+                        max={new Date(2028, 11, 31)}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    // 已初始化 → 显示施工面板
+    const currentPhaseInfo = PHASE_LIST.find(p => p.phase === project.currentPhase);
+    const completedPhases = project.phases.filter(p => p.status === 'completed').length;
+    const totalPhases = project.phases.filter(p => p.phase !== 'warranty').length;
+    const overallPercent = Math.round(completedPhases / totalPhases * 100);
+    const totalSpent = getTotalSpent();
+    const daysElapsed = Math.max(0, dayjs().diff(dayjs(project.startDate), 'day'));
+
+    return (
+        <div style={{ background: 'var(--color-bg)', minHeight: '100vh', paddingBottom: 80 }}>
+            {/* Header */}
+            <div style={{
+                background: 'linear-gradient(135deg, #059669 0%, #10B981 100%)',
+                padding: '20px',
+                color: '#fff',
+            }}>
+                <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>施工陪跑</h1>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div>
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>当前阶段</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
+                            {currentPhaseInfo?.icon} {currentPhaseInfo?.name}
+                        </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 12, opacity: 0.8 }}>已开工</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{daysElapsed}天</div>
+                    </div>
+                </div>
+                <ProgressBar
+                    percent={overallPercent}
+                    style={{
+                        '--fill-color': '#fff',
+                        '--track-color': 'rgba(255,255,255,0.3)',
+                        '--track-width': '8px',
+                    } as any}
+                />
+                <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
+                    总体进度 {overallPercent}%（{completedPhases}/{totalPhases}个阶段）
+                </div>
+            </div>
+
+            {/* 快捷操作 */}
+            <div style={{ display: 'flex', gap: 10, padding: '16px', overflowX: 'auto' }}>
+                {[
+                    { label: '验收清单', icon: '✅', path: `/construction/checklist/${project.currentPhase}` },
+                    { label: '采购清单', icon: '🛒', path: '/construction/purchases' },
+                    { label: '记录日志', icon: '📝', path: '/construction/log' },
+                    { label: '付款记录', icon: '💰', path: '/construction/payments' },
+                ].map(action => (
+                    <div key={action.label}
+                        onClick={() => navigate(action.path)}
+                        style={{
+                            minWidth: 80,
+                            padding: '14px 12px',
+                            background: '#fff',
+                            borderRadius: 12,
+                            textAlign: 'center',
+                            boxShadow: 'var(--shadow-sm)',
+                            cursor: 'pointer',
+                            flexShrink: 0,
+                        }}>
+                        <div style={{ fontSize: 24, marginBottom: 4 }}>{action.icon}</div>
+                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>{action.label}</div>
+                    </div>
+                ))}
+            </div>
+
+            {/* 费用概览 */}
+            {totalSpent > 0 && (
+                <div style={{ margin: '0 16px 16px', padding: 16, background: '#fff', borderRadius: 12 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>💰 已支出</div>
+                    <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--color-primary)' }}>{formatMoney(totalSpent)}</div>
+                    {currentHouse?.targetBudget && (
+                        <div style={{ marginTop: 8 }}>
+                            <ProgressBar
+                                percent={Math.min(100, Math.round(totalSpent / currentHouse.targetBudget * 100))}
+                                style={{
+                                    '--fill-color': totalSpent > currentHouse.targetBudget ? '#EF4444' : 'var(--color-primary)',
+                                    '--track-width': '6px',
+                                } as any}
+                            />
+                            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                                目标预算 {formatMoney(currentHouse.targetBudget)}，已用 {Math.round(totalSpent / currentHouse.targetBudget * 100)}%
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 阶段时间线 */}
+            <div style={{ padding: '0 16px' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>施工阶段</h3>
+                {PHASE_LIST.filter(p => p.phase !== 'warranty').map((phaseInfo, idx) => {
+                    const record = project.phases.find(p => p.phase === phaseInfo.phase);
+                    const progress = getPhaseProgress(phaseInfo.phase);
+                    const isActive = project.currentPhase === phaseInfo.phase;
+                    const isCompleted = record?.status === 'completed';
+
+                    return (
+                        <div key={phaseInfo.phase} style={{
+                            display: 'flex',
+                            gap: 12,
+                            marginBottom: 4,
+                        }}>
+                            {/* 时间线左侧 */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 32 }}>
+                                <div style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: '50%',
+                                    background: isCompleted ? '#10B981' : isActive ? 'var(--color-primary)' : '#E5E7EB',
+                                    color: isCompleted || isActive ? '#fff' : '#9CA3AF',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: 14,
+                                    fontWeight: 600,
+                                    flexShrink: 0,
+                                }}>
+                                    {isCompleted ? '✓' : phaseInfo.icon}
+                                </div>
+                                {idx < PHASE_LIST.length - 2 && (
+                                    <div style={{
+                                        width: 2,
+                                        flex: 1,
+                                        minHeight: 40,
+                                        background: isCompleted ? '#10B981' : '#E5E7EB',
+                                    }} />
+                                )}
+                            </div>
+
+                            {/* 阶段卡片 */}
+                            <div
+                                onClick={() => {
+                                    if (isActive || isCompleted) {
+                                        navigate(`/construction/checklist/${phaseInfo.phase}`);
+                                    }
+                                }}
+                                style={{
+                                    flex: 1,
+                                    background: isActive ? '#EEF2FF' : '#fff',
+                                    borderRadius: 10,
+                                    padding: '12px 14px',
+                                    marginBottom: 8,
+                                    border: isActive ? '1px solid #C7D2FE' : '1px solid var(--color-border)',
+                                    cursor: (isActive || isCompleted) ? 'pointer' : 'default',
+                                    opacity: record?.status === 'pending' ? 0.6 : 1,
+                                }}
+                            >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <span style={{ fontWeight: 600, fontSize: 14 }}>{phaseInfo.name}</span>
+                                    {isCompleted && <Tag color="success" fill="outline" style={{ fontSize: 10 }}>已完成</Tag>}
+                                    {isActive && <Tag color="primary" fill="outline" style={{ fontSize: 10 }}>进行中</Tag>}
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                                    {phaseInfo.description}
+                                </div>
+                                {(isActive || isCompleted) && progress.total > 0 && (
+                                    <div style={{ marginTop: 8 }}>
+                                        <ProgressBar
+                                            percent={progress.percent}
+                                            style={{ '--track-width': '4px', '--fill-color': isCompleted ? '#10B981' : 'var(--color-primary)' } as any}
+                                        />
+                                        <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginTop: 2 }}>
+                                            验收清单 {progress.completed}/{progress.total}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* 当前阶段额外操作 */}
+                                {isActive && (
+                                    <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                                        <Button size="mini" color="primary" fill="outline"
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/construction/checklist/${phaseInfo.phase}`); }}>
+                                            验收清单
+                                        </Button>
+                                        <Button size="mini" color="success" fill="solid"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                Dialog.confirm({
+                                                    content: `确认「${phaseInfo.name}」已完成？建议先完成验收清单再确认。`,
+                                                    onConfirm: () => {
+                                                        completePhase(phaseInfo.phase);
+                                                        Toast.show({ content: `${phaseInfo.name}已完成！`, icon: 'success' });
+                                                    },
+                                                });
+                                            }}>
+                                            完成此阶段
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div style={{ height: 40 }} />
+        </div>
+    );
+}

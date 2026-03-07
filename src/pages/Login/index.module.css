@@ -1,0 +1,23 @@
+/* src/pages/Login/index.module.css */
+
+.container {
+    min-height: 100vh;
+    padding: 60px 24px 24px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.header {
+    text-align: center;
+    color: #fff;
+    margin-bottom: 40px;
+}
+
+.header h1 {
+    font-size: 28px;
+    margin-bottom: 8px;
+}
+
+.header p {
+    font-size: 14px;
+    opacity: 0.8;
+}
