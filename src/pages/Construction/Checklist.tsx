@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { NavBar, List, Checkbox, Button, Modal, Tag, Toast } from 'antd-mobile';
-import { QuestionCircleOutline, ExclamationTriangleOutline } from 'antd-mobile-icons';
+import { NavBar, List, Checkbox, Button, Modal, Tag, Toast, ImageUploader } from 'antd-mobile';
+import { QuestionCircleOutline, ExclamationTriangleOutline, PictureOutline } from 'antd-mobile-icons';
 import { useConstructionStore } from '@/store';
 import { PHASE_LIST } from '@/engine/constructionData';
 import { aiApi } from '@/api/services';
 import { ChecklistItem } from '@/types';
 
 export default function Checklist() {
-    const { currentPhase, checklists, toggleChecklist } = useConstructionStore();
+    const { currentPhase, checklists, toggleChecklist, uploadPhoto, updateChecklistPhoto } = useConstructionStore();
     const [aiLoading, setAiLoading] = useState<string | null>(null);
 
     const phaseInfo = PHASE_LIST.find(p => p.phase === currentPhase);
@@ -34,6 +34,21 @@ export default function Checklist() {
             Toast.show({ content: 'AI 服务暂时不可用: ' + (error.message || ''), icon: 'fail' });
         } finally {
             setAiLoading(null);
+        }
+    };
+
+    const handleUpload = async (file: File, itemId: string) => {
+        try {
+            Toast.show({ icon: 'loading', content: '上传中...' });
+            const url = await uploadPhoto(file);
+            updateChecklistPhoto(itemId, url);
+            Toast.clear();
+            Toast.show({ icon: 'success', content: '已保存凭证' });
+            return url;
+        } catch (e: any) {
+            Toast.clear();
+            Toast.show({ icon: 'fail', content: '上传失败: ' + e.message });
+            throw e;
         }
     };
 
@@ -89,12 +104,38 @@ export default function Checklist() {
                                         {item.importance === 'critical' && <ExclamationTriangleOutline style={{ color: '#EF4444', marginRight: 4 }} />}
                                         {item.content}
                                     </div>
-                                    <div style={{ fontSize: 12, color: '#999' }}>
-                                        <Tag color={item.importance === 'critical' ? 'danger' : 'default'} style={{ fontSize: 10, marginRight: 6 }}>
-                                            {item.importance === 'critical' ? '严控' : item.importance === 'important' ? '重要' : '常规'}
-                                        </Tag>
-                                        {item.category}
+                                    <div style={{ fontSize: 12, color: '#999', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>
+                                            <Tag color={item.importance === 'critical' ? 'danger' : 'default'} style={{ fontSize: 10, marginRight: 6 }}>
+                                                {item.importance === 'critical' ? '严控' : item.importance === 'important' ? '重要' : '常规'}
+                                            </Tag>
+                                            {item.category}
+                                        </div>
+                                        {item.photoRequired && !item.photoUrl && (
+                                            <div style={{ display: 'flex', alignItems: 'center', color: '#F59E0B', gap: 4 }}>
+                                                <PictureOutline /> 需传凭证
+                                            </div>
+                                        )}
                                     </div>
+                                    {/* 图片上传区域 */}
+                                    {item.photoRequired && (
+                                        <div style={{ marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                                            <ImageUploader
+                                                value={item.photoUrl ? [{ url: item.photoUrl }] : []}
+                                                upload={async (file) => {
+                                                    const url = await handleUpload(file, item.id);
+                                                    return { url };
+                                                }}
+                                                onDelete={() => {
+                                                    // 若有需要可提供删除凭证支持，此处置为空
+                                                    updateChecklistPhoto(item.id, '');
+                                                    return true;
+                                                }}
+                                                maxCount={1}
+                                                style={{ '--cell-size': '64px' }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             </List.Item>
                         ))}

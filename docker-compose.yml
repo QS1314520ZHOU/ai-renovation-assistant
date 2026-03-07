@@ -42,7 +42,9 @@ services:
         condition: service_started
     volumes:
       - ./app:/code/app
+      - uploadsdata:/code/app/static/uploads
 
 volumes:
   pgdata:
   redisdata:
+  uploadsdata:

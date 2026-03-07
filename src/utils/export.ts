@@ -79,7 +79,9 @@ export async function exportAsPDF(
         { tier: 'premium', label: '改善档', scheme: result.premium },
     ];
     tiers.forEach(t => {
-        addText(`${t.label}：${formatMoney(t.scheme.totalBudget)}（约${Math.round(t.scheme.totalBudget / house.innerArea)}元/㎡）`, 11);
+        if (t.scheme) {
+            addText(`${t.label}：${formatMoney(t.scheme.total_amount)}（约${Math.round(t.scheme.total_amount / house.innerArea)}元/㎡）`, 11);
+        }
     });
     y += 5;
 
@@ -87,12 +89,12 @@ export async function exportAsPDF(
     const currentScheme = result[house.tierLevel];
     addLine();
     addText(`三、${tierLevelLabel(house.tierLevel)}预算明细`, 14, true);
-    addText(`硬装基础：${formatMoney(currentScheme.hardDecorationBudget)}`, 11);
-    addText(`主材：${formatMoney(currentScheme.mainMaterialBudget)}`, 11);
-    addText(`厨卫：${formatMoney(currentScheme.kitchenBathroomBudget)}`, 11);
-    addText(`定制：${formatMoney(currentScheme.customBudget)}`, 11);
-    addText(`其他+管理费：${formatMoney(currentScheme.otherBudget)}`, 11);
-    addText(`预备金：${formatMoney(currentScheme.contingencyBudget)}`, 11);
+    if (currentScheme) {
+        addText(`硬装与人工：${formatMoney(currentScheme.labor_amount)}`, 11);
+        addText(`主材及辅配：${formatMoney(currentScheme.material_amount)}`, 11);
+        addText(`管理费：${formatMoney(currentScheme.management_fee)}`, 11);
+        addText(`预备金：${formatMoney(currentScheme.contingency)}`, 11);
+    }
     y += 3;
 
     // 详细模式 - 逐项
@@ -101,18 +103,20 @@ export async function exportAsPDF(
         addLine();
         addText('四、分项工程量明细', 14, true);
 
-        const categoryMap = new Map<string, typeof currentScheme.items>();
-        currentScheme.items.forEach(item => {
-            if (!categoryMap.has(item.category)) categoryMap.set(item.category, []);
-            categoryMap.get(item.category)!.push(item);
-        });
+        const categoryMap = new Map<string, any[]>();
+        if (currentScheme && currentScheme.items) {
+            currentScheme.items.forEach(item => {
+                if (!categoryMap.has(item.category)) categoryMap.set(item.category, []);
+                categoryMap.get(item.category)!.push(item);
+            });
+        }
 
         categoryMap.forEach((items, cat) => {
             checkPageBreak(20);
             addText(`【${categoryLabel(cat)}】`, 12, true, '#4F46E5');
             items.forEach(item => {
                 checkPageBreak(12);
-                addText(`${item.itemName}：${item.quantity}${item.unit} × ${item.materialUnitPrice + item.laborUnitPrice + item.accessoryUnitPrice}元 = ${formatMoney(item.subtotal)}`, 10);
+                addText(`${item.item_name}：${item.quantity}${item.unit} × ${item.material_unit_price + item.labor_unit_price + item.accessory_unit_price}元 = ${formatMoney(item.subtotal)}`, 10);
             });
             y += 3;
         });
@@ -145,10 +149,11 @@ export async function exportAsPDF(
 // 生成分享文本
 export function generateShareText(house: HouseProfile, result: BudgetResult): string {
     const scheme = result[house.tierLevel];
+    if (!scheme) return '无法生成分享内容';
     return `📊 我的装修预算报告
 🏠 ${house.city} · ${house.layout} · ${house.innerArea}㎡
-💰 ${tierLevelLabel(house.tierLevel)}预算：${formatMoney(scheme.totalBudget)}
-📋 约${Math.round(scheme.totalBudget / house.innerArea)}元/㎡
+💰 ${tierLevelLabel(house.tierLevel)}预算：${formatMoney(scheme.total_amount)}
+📋 约${Math.round(scheme.total_amount / house.innerArea)}元/㎡
 ⚠️ 发现${result.missingItems.length}项容易遗漏的费用
 
 —— 由AI装修预算助手生成`;

@@ -34,6 +34,7 @@ export interface ConstructionState {
 
     toggleChecklist: (id: string) => void;
     updateChecklistNote: (id: string, note: string) => void;
+    updateChecklistPhoto: (id: string, url: string) => void;
 
     togglePurchase: (id: string) => void;
     updatePurchasePrice: (id: string, price: number) => void;
@@ -126,6 +127,11 @@ export const useConstructionStore = create<ConstructionState>()(
             updateChecklistNote: (id, note) =>
                 set((s) => ({
                     checklists: s.checklists.map(c => c.id === id ? { ...c, note } : c),
+                })),
+
+            updateChecklistPhoto: (id, url) =>
+                set((s) => ({
+                    checklists: s.checklists.map(c => c.id === id ? { ...c, photoUrl: url, completed: true, completedAt: new Date().toISOString() } : c),
                 })),
 
             togglePurchase: (id) =>

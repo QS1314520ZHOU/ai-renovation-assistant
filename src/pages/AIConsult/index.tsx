@@ -53,7 +53,7 @@ export default function AIConsult() {
                 session_id: sessionId,
                 project_id: currentHouse?.id || undefined,
                 message: text,
-                session_type: 'consult'
+                session_type: 'budget'
             });
 
             if (res.session_id && !sessionId) {

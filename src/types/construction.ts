@@ -94,6 +94,7 @@ export interface ChecklistItem {
     completed: boolean;
     completedAt?: string;
     note?: string;
+    photoUrl?: string; // 新增：用于挂载凭证照片
 }
 
 export interface PurchaseItem {

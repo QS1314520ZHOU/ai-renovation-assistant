@@ -27,12 +27,11 @@ const MOVE_IN_CHECKLIST = [
 
 export default function PostRenovation() {
     const navigate = useNavigate();
-    const { project, getTotalSpent } = useConstructionStore();
-    const { currentHouse, budgetResult } = useProjectStore();
+    const { startDate, phases, getTotalSpent } = useConstructionStore();
+    const { currentHouse } = useProjectStore();
 
     const totalSpent = getTotalSpent();
-    const startDate = project?.startDate;
-    const endDate = project?.phases.find(p => p.phase === 'completed')?.endDate;
+    const endDate = phases.find((p: any) => p.phase === 'completed')?.endDate;
     const totalDays = startDate && endDate ? dayjs(endDate).diff(dayjs(startDate), 'day') : 0;
 
     return (
@@ -116,11 +115,11 @@ export default function PostRenovation() {
             {/* 导出归档 */}
             <div style={{ padding: '0 12px 40px' }}>
                 <Button block color="primary" size="large" shape="rounded" style={{ marginBottom: 10, height: 48 }}
-                    onClick={() => Toast.show({ content: '项目资料已归档保存', icon: 'success' })}>
+                    onClick={() => { Toast.show({ content: '项目资料已归档保存', icon: 'success' }); }}>
                     📦 归档项目资料
                 </Button>
                 <Button block fill="outline" size="large" shape="rounded" style={{ height: 48 }}
-                    onClick={() => Toast.show({ content: '报告已导出', icon: 'success' })}>
+                    onClick={() => { Toast.show({ content: '报告已导出', icon: 'success' }); }}>
                     📄 导出装修总结报告
                 </Button>
             </div>

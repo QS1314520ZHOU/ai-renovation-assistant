@@ -5,7 +5,6 @@ import {
 } from 'antd-mobile';
 import { useProjectStore } from '@/store';
 import { budgetApi } from '@/api/services';
-import { getCityNames } from '@/engine/cityFactors';
 import { HouseProfile, TierLevel } from '@/types';
 import { v4 as uuid } from 'uuid';
 
@@ -37,7 +36,8 @@ const floorOptions = [
     ],
 ];
 
-const cityOptions = [getCityNames().map(name => ({ label: name, value: name }))];
+const cityNames = ['北京', '上海', '广州', '深圳', '成都', '杭州', '重庆', '西安', '武汉', '南京'];
+const cityOptions = [cityNames.map((name: string) => ({ label: name, value: name }))];
 
 export default function QuickBudget() {
     const navigate = useNavigate();

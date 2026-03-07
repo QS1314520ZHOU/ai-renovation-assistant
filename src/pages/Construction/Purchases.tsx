@@ -6,7 +6,7 @@ import { PHASE_LIST } from '@/engine/constructionData';
 
 export default function Purchases() {
     const navigate = useNavigate();
-    const { purchases, togglePurchaseItem, project } = useConstructionStore();
+    const { purchases, togglePurchase, currentPhase } = useConstructionStore();
 
     const grouped = useMemo(() => {
         const map = new Map<string, typeof purchases>();
@@ -43,7 +43,7 @@ export default function Purchases() {
             <div style={{ padding: '0 12px 40px' }}>
                 {Array.from(grouped.entries()).map(([phase, items]) => {
                     const phaseInfo = PHASE_LIST.find(p => p.phase === phase);
-                    const isCurrent = project?.currentPhase === phase;
+                    const isCurrent = currentPhase === phase;
                     const unboughtCount = items.filter(i => !i.purchased).length;
 
                     return (
@@ -72,7 +72,7 @@ export default function Purchases() {
                                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                                         <Checkbox
                                             checked={item.purchased}
-                                            onChange={() => togglePurchaseItem(item.id)}
+                                            onChange={() => togglePurchase(item.id)}
                                             style={{ flexShrink: 0, marginTop: 2 }}
                                         />
                                         <div style={{ flex: 1 }}>
