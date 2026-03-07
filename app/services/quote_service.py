@@ -5,10 +5,10 @@ import base64
 from typing import List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from openai import AsyncOpenAI
-from app.config import settings
+from app.core.config import settings
 from app.models.quote import QuoteUpload, QuoteItem, QuoteRiskReport
 from app.models.pricing import PricingStandardItem, PricingRule
+from app.services.ai_client_factory import AIClientFactory
 
 QUOTE_PARSE_PROMPT = """你是一个装修报价单分析专家。请将以下报价单内容解析为结构化JSON格式。
 
@@ -43,34 +43,11 @@ class QuoteService:
         self._client = None
         self._config = None
 
-    async def _get_config(self):
-        if self._config:
-            return self._config
-        # 共享 AIService 的配置获取逻辑
-        from app.models.config import SystemConfig
-        from app.config import settings
-        result = await self.db.execute(select(SystemConfig).where(SystemConfig.key == "ai_config", SystemConfig.is_active == True))
-        cfg_record = result.scalar_one_or_none()
-        if cfg_record:
-            val = cfg_record.value
-            active_id = val.get("activeModelId")
-            models = val.get("aiModels", [])
-            active_model = next((m for m in models if m["id"] == active_id), None) if active_id else (models[0] if models else None)
-            if active_model:
-                self._config = {
-                    "base_url": active_model.get("baseUrl"),
-                    "api_key": active_model.get("apiKey"),
-                    "model": active_model.get("models")[0] if active_model.get("models") else settings.AI_MODEL
-                }
-                return self._config
-        self._config = {"base_url": settings.AI_BASE_URL, "api_key": settings.AI_API_KEY, "model": settings.AI_MODEL}
-        return self._config
-
     async def _get_client(self):
-        if self._client: return self._client
-        cfg = await self._get_config()
-        self._client = AsyncOpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"])
-        return self._client
+        return await AIClientFactory.get_client(self.db)
+
+    async def _get_config(self):
+        return await AIClientFactory.get_config(self.db)
 
     async def upload_and_parse(self, project_id: uuid.UUID, file):
         # 1. Read file and encode to base64

@@ -65,7 +65,15 @@ async function request<T = any>(
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
-        throw new Error('未登录');
+        throw new Error('会话已过期，请重新登录');
+    }
+
+    if (res.status === 429) {
+        throw new Error('请求过于频繁，请稍后再试');
+    }
+
+    if (res.status >= 500) {
+        throw new Error('服务器繁忙，请稍后再试');
     }
 
     const json: ApiResponse<T> = await res.json();

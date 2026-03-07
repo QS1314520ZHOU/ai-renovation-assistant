@@ -26,7 +26,8 @@ export default function AIInspect() {
         }
 
         const fileItem = fileList[0];
-        if (!fileItem.extra) {
+        const rawFile = (fileItem as any).file || fileItem.extra;
+        if (!rawFile) {
             Toast.show({ content: '照片处理中，请稍后', icon: 'fail' });
             return;
         }
@@ -39,7 +40,7 @@ export default function AIInspect() {
             const res = await aiApi.inspect({
                 phase: phaseInfo?.name || currentPhase,
                 items: criticalItems || '常规施工标准',
-                file: fileItem.extra as File
+                file: rawFile
             });
 
             setResult(res.reply);

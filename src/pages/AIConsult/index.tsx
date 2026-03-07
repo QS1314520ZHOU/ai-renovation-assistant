@@ -101,14 +101,10 @@ export default function AIConsult() {
             return;
         }
 
-        setLoading(true);
         try {
-            // 映射城市代码 (简单 Mock: 成都 510100, 北京 110100, 默认成都)
-            const cityCodeMap: Record<string, string> = { '成都': '510100', '北京': '110100', '上海': '310100', '广州': '440100', '深圳': '440300' };
-            const cityCode = cityCodeMap[house.city] || '510100';
-
+            const cityName = house.city || '成都';
             const result = await budgetApi.calculate({
-                city_code: cityCode,
+                city_name: cityName,
                 inner_area: house.innerArea,
                 layout_type: house.layout,
                 tier: (house.tierLevel as string) || 'standard',
@@ -292,21 +288,54 @@ export default function AIConsult() {
 // 字段映射：AI提取字段 → HouseProfile
 function mapFieldsToHouse(fields: Record<string, any>): Partial<HouseProfile> {
     const house: Partial<HouseProfile> = {};
-    if (fields.city) house.city = fields.city;
-    if (fields.innerArea) house.innerArea = Number(fields.innerArea);
-    if (fields.grossArea) house.grossArea = Number(fields.grossArea);
-    if (fields.layout) house.layout = fields.layout;
-    if (fields.tierLevel) house.tierLevel = fields.tierLevel as TierLevel;
-    if (fields.targetBudget) house.targetBudget = Number(fields.targetBudget);
-    if (fields.floorPreference) house.floorPreference = fields.floorPreference;
-    if (fields.hasCeiling !== undefined) house.hasCeiling = Boolean(fields.hasCeiling);
-    if (fields.hasCustomCabinet !== undefined) house.hasCustomCabinet = Boolean(fields.hasCustomCabinet);
-    if (fields.includeFurniture !== undefined) house.includeFurniture = Boolean(fields.includeFurniture);
-    if (fields.bathroomCount) house.bathroomCount = Number(fields.bathroomCount);
-    if (fields.kitchenCount) house.kitchenCount = Number(fields.kitchenCount);
-    if (fields.balconyCount) house.balconyCount = Number(fields.balconyCount);
-    if (fields.purpose) house.purpose = fields.purpose;
-    if (fields.targetMoveInDate) house.targetMoveInDate = fields.targetMoveInDate;
+    // 支持驼峰和蛇形
+    const getVal = (camel: string, snake: string) => fields[camel] ?? fields[snake];
+
+    const city = getVal('city', 'city');
+    if (city) house.city = city;
+
+    const innerArea = getVal('innerArea', 'inner_area');
+    if (innerArea) house.innerArea = Number(innerArea);
+
+    const grossArea = getVal('grossArea', 'gross_area');
+    if (grossArea) house.grossArea = Number(grossArea);
+
+    const layout = getVal('layout', 'layout_type') || getVal('layout', 'layout');
+    if (layout) house.layout = layout;
+
+    const tier = getVal('tierLevel', 'tier_level') || getVal('tierLevel', 'tier');
+    if (tier) house.tierLevel = tier as TierLevel;
+
+    const targetBudget = getVal('targetBudget', 'target_budget');
+    if (targetBudget) house.targetBudget = Number(targetBudget);
+
+    const floorPreference = getVal('floorPreference', 'floor_preference');
+    if (floorPreference) house.floorPreference = floorPreference;
+
+    const hasCeiling = getVal('hasCeiling', 'has_ceiling');
+    if (hasCeiling !== undefined) house.hasCeiling = Boolean(hasCeiling);
+
+    const hasCustomCabinet = getVal('hasCustomCabinet', 'has_custom_cabinet');
+    if (hasCustomCabinet !== undefined) house.hasCustomCabinet = Boolean(hasCustomCabinet);
+
+    const includeFurniture = getVal('includeFurniture', 'include_furniture');
+    if (includeFurniture !== undefined) house.includeFurniture = Boolean(includeFurniture);
+
+    const bathroomCount = getVal('bathroomCount', 'bathroom_count');
+    if (bathroomCount) house.bathroomCount = Number(bathroomCount);
+
+    const kitchenCount = getVal('kitchenCount', 'kitchen_count');
+    if (kitchenCount) house.kitchenCount = Number(kitchenCount);
+
+    const balconyCount = getVal('balconyCount', 'balcony_count');
+    if (balconyCount) house.balconyCount = Number(balconyCount);
+
+    const purpose = getVal('purpose', 'purpose');
+    if (purpose) house.purpose = purpose;
+
+    const moveInDate = getVal('targetMoveInDate', 'target_move_in_date') || getVal('targetMoveInDate', 'move_in_date');
+    if (moveInDate) house.targetMoveInDate = moveInDate;
+
     if (!house.innerArea && house.grossArea) house.innerArea = Math.round(house.grossArea * 0.82);
     if (!house.grossArea && house.innerArea) house.grossArea = Math.round(house.innerArea * 1.22);
     return house;
@@ -315,13 +344,25 @@ function mapFieldsToHouse(fields: Record<string, any>): Partial<HouseProfile> {
 // 字段中文标签
 function fieldLabel(key: string): string {
     const map: Record<string, string> = {
-        city: '城市', innerArea: '套内面积', grossArea: '建筑面积',
-        layout: '户型', tierLevel: '装修档次', targetBudget: '目标预算',
-        floorPreference: '地面偏好', hasCeiling: '是否吊顶', hasCustomCabinet: '是否定制柜',
-        includeFurniture: '含家具家电', bathroomCount: '卫生间数', kitchenCount: '厨房数',
-        balconyCount: '阳台数', purpose: '装修目的', targetMoveInDate: '入住时间',
-        familyHasElderly: '有老人', familyHasChildren: '有孩子', familyHasPets: '有宠物',
-        houseType: '房屋类型',
+        city: '城市',
+        innerArea: '套内面积', inner_area: '套内面积',
+        grossArea: '建筑面积', gross_area: '建筑面积',
+        layout: '户型', layout_type: '户型',
+        tierLevel: '装修档次', tier_level: '装修档次', tier: '装修档次',
+        targetBudget: '目标预算', target_budget: '目标预算',
+        floorPreference: '地面偏好', floor_preference: '地面偏好',
+        hasCeiling: '是否吊顶', has_ceiling: '是否吊顶',
+        hasCustomCabinet: '是否定制柜', has_custom_cabinet: '是否定制柜',
+        includeFurniture: '含家具家电', include_furniture: '含家具家电',
+        bathroomCount: '卫生间数', bathroom_count: '卫生间数',
+        kitchenCount: '厨房数', kitchen_count: '厨房数',
+        balconyCount: '阳台数', balcony_count: '阳台数',
+        purpose: '装修目的',
+        targetMoveInDate: '入住时间', target_move_in_date: '入住时间', move_in_date: '入住时间',
+        familyHasElderly: '有老人', family_has_elderly: '有老人',
+        familyHasChildren: '有孩子', family_has_children: '有孩子',
+        familyHasPets: '有宠物', family_has_pets: '有宠物',
+        houseType: '房屋类型', house_type: '房屋类型',
     };
     return map[key] || key;
 }

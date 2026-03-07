@@ -79,6 +79,8 @@ export interface PaymentRecord {
     receiptUrl?: string;
     date: string;
     createdAt: string;
+    isAddon?: boolean;
+    addonReason?: string;
 }
 
 export interface ChecklistItem {

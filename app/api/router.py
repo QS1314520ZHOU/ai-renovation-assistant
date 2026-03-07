@@ -1,5 +1,8 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, projects, houses, budgets, ai, construction, glossary, quotes
+from app.api.v1 import (
+    auth, projects, houses, budgets, ai, construction, 
+    glossary, quotes, contracts, materials, config
+)
 
 api_router = APIRouter()
 
@@ -11,4 +14,6 @@ api_router.include_router(ai.router,           prefix="/v1/ai",           tags=[
 api_router.include_router(construction.router, prefix="/v1/construction", tags=["施工管理"])
 api_router.include_router(glossary.router,     prefix="/v1/glossary",     tags=["装修词典"])
 api_router.include_router(quotes.router,       prefix="/v1/quotes",       tags=["报价体检"])
+api_router.include_router(contracts.router,    prefix="/v1/contracts",    tags=["合同管理"])
+api_router.include_router(materials.router,    prefix="/v1/materials",    tags=["材料推荐"])
 api_router.include_router(config.router,       prefix="/v1/config",       tags=["系统配置"])

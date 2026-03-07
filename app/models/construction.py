@@ -40,6 +40,8 @@ class PaymentRecord(Base, TimestampMixin):
     payment_date: Mapped[date] = mapped_column(Date)
     note: Mapped[str | None] = mapped_column(Text)
     receipt_url: Mapped[str | None] = mapped_column(String(500))
+    is_addon: Mapped[bool] = mapped_column(Boolean, default=False)
+    addon_reason: Mapped[str | None] = mapped_column(String(200))
 
 class ChecklistRecord(Base, TimestampMixin):
     __tablename__ = "checklist_records"

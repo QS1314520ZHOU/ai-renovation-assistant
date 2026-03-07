@@ -23,6 +23,8 @@ class PaymentCreate(BaseModel):
     payee: str | None = None
     payment_date: date
     note: str | None = None
+    is_addon: bool = False
+    addon_reason: str | None = None
 
 class ChecklistToggle(BaseModel):
     checklist_id: uuid.UUID

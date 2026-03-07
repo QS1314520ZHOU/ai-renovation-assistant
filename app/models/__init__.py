@@ -8,6 +8,7 @@ from app.models.pricing import (
     LayoutTemplate, RoomTemplate,
 )
 from app.models.quote import QuoteUpload, QuoteItem, QuoteRiskReport
+from app.models.contract import ContractUpload, ContractRiskReport
 from app.models.ai_session import AISession, AIMessage
 from app.models.construction import (
     ConstructionPhaseRecord, ConstructionLog,
@@ -26,6 +27,7 @@ __all__ = [
     "PricingStandardItem", "PricingRule", "CityFactor",
     "LayoutTemplate", "RoomTemplate",
     "QuoteUpload", "QuoteItem", "QuoteRiskReport",
+    "ContractUpload", "ContractRiskReport",
     "AISession", "AIMessage",
     "ConstructionPhaseRecord", "ConstructionLog",
     "PaymentRecord", "ChecklistRecord", "PurchaseRecord",

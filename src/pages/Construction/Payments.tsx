@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NavBar, Button, Form, Input, Picker, Toast, Empty, Tag } from 'antd-mobile';
+import { NavBar, Button, Form, Input, Picker, Toast, Empty, Tag, Switch } from 'antd-mobile';
 import { useConstructionStore, useProjectStore } from '@/store';
 import { PHASE_LIST } from '@/engine/constructionData';
 import { formatMoney } from '@/utils/format';
@@ -13,26 +13,29 @@ const phaseOptions = [PHASE_LIST.filter(p => p.phase !== 'warranty').map(p => ({
 
 export default function Payments() {
     const navigate = useNavigate();
-    const { project, addPayment, getTotalSpent } = useConstructionStore();
+    const { currentPhase, payments, addPayment, getTotalSpent } = useConstructionStore();
     const { currentHouse } = useProjectStore();
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState({
         amount: '',
         description: '',
         payee: '',
-        phase: project?.currentPhase || 'pre_construction',
+        phase: currentPhase || 'pre_construction',
+        isAddon: false,
+        addonReason: '',
     });
 
-    if (!project) return null;
-
-    const payments = [...project.payments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const sortedPayments = [...payments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const totalSpent = getTotalSpent();
 
     // 按阶段分组统计
     const phaseSpending = PHASE_LIST.map(p => ({
         ...p,
-        spent: project.payments.filter(pay => pay.phase === p.phase).reduce((s, pay) => s + pay.amount, 0),
+        spent: payments.filter(pay => pay.phase === p.phase).reduce((s, pay) => s + pay.amount, 0),
     })).filter(p => p.spent > 0);
+
+    // 增项统计
+    const addonSpent = payments.filter(pay => pay.isAddon).reduce((s, pay) => s + pay.amount, 0);
 
     const handleSubmit = () => {
         const amount = parseFloat(form.amount);
@@ -47,8 +50,10 @@ export default function Payments() {
             payee: form.payee || '施工方',
             paymentMethod: '',
             date: dayjs().format('YYYY-MM-DD'),
-        });
-        setForm({ amount: '', description: '', payee: '', phase: project.currentPhase });
+            isAddon: form.isAddon,
+            addonReason: form.addonReason,
+        } as any);
+        setForm({ amount: '', description: '', payee: '', phase: currentPhase, isAddon: false, addonReason: '' });
         setShowForm(false);
         Toast.show({ content: '付款记录已添加', icon: 'success' });
     };
@@ -78,6 +83,14 @@ export default function Payments() {
                 {currentHouse?.targetBudget && (
                     <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
                         目标预算 {formatMoney(currentHouse.targetBudget)} · 剩余 {formatMoney(Math.max(0, currentHouse.targetBudget - totalSpent))}
+                    </div>
+                )}
+                {addonSpent > 0 && (
+                    <div style={{
+                        marginTop: 12, background: 'rgba(255,255,255,0.2)', padding: '6px 10px',
+                        borderRadius: 6, fontSize: 12, display: 'inline-block'
+                    }}>
+                        ⚠️ 包含意外增项支出: {formatMoney(addonSpent)}
                     </div>
                 )}
             </div>
@@ -115,11 +128,18 @@ export default function Payments() {
                             <Input placeholder="如：XX装修公司" value={form.payee}
                                 onChange={v => setForm(f => ({ ...f, payee: v }))} />
                         </Form.Item>
+                        <Form.Item label="是否属于额外增项？" extra={<Switch checked={form.isAddon} onChange={v => setForm(f => ({ ...f, isAddon: v }))} />} />
+                        {form.isAddon && (
+                            <Form.Item label="增项原因">
+                                <Input placeholder="如：拆旧发现墙体开裂需修补" value={form.addonReason}
+                                    onChange={v => setForm(f => ({ ...f, addonReason: v }))} />
+                            </Form.Item>
+                        )}
                         <Form.Item label="所属阶段">
                             <Picker
                                 columns={phaseOptions}
                                 value={[form.phase]}
-                                onConfirm={v => setForm(f => ({ ...f, phase: v[0] as string }))}
+                                onConfirm={v => setForm(f => ({ ...f, phase: v[0] as any }))}
                             >
                                 {(_, { open }) => (
                                     <div onClick={open}>
@@ -139,10 +159,10 @@ export default function Payments() {
             {/* 付款明细 */}
             <div style={{ padding: '0 12px 40px' }}>
                 <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, paddingLeft: 4 }}>付款明细</h3>
-                {payments.length === 0 ? (
+                {sortedPayments.length === 0 ? (
                     <Empty description="暂无付款记录" />
                 ) : (
-                    payments.map(p => {
+                    sortedPayments.map(p => {
                         const phaseInfo = PHASE_LIST.find(ph => ph.phase === p.phase);
                         return (
                             <div key={p.id} style={{
@@ -153,6 +173,7 @@ export default function Payments() {
                                     <div style={{ fontSize: 14, fontWeight: 500 }}>{p.description}</div>
                                     <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
                                         <Tag style={{ fontSize: 10 }}>{phaseInfo?.icon} {phaseInfo?.name}</Tag>
+                                        {p.isAddon && <Tag color="warning" style={{ fontSize: 10 }}>⚠️ 增项</Tag>}
                                         <span>{p.payee}</span>
                                         <span>{dayjs(p.date).format('MM-DD')}</span>
                                     </div>

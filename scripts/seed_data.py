@@ -1,178 +1,131 @@
-"""运行: cd D:\ai-renovation-assistant && set PYTHONPATH=D:\ai-renovation-assistant && python -m scripts.seed_data"""
+import asyncio
 import uuid
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select
+from app.config import settings
+from app.models.base import Base
 from app.models.pricing import PricingStandardItem, PricingRule, CityFactor, LayoutTemplate, RoomTemplate
+from app.models.config import SystemConfig
 from app.models.glossary import GlossaryTerm
 
-# 同步连接，直接连本地 PostgreSQL
-DATABASE_URL = "postgresql://renovation:renovation2024@localhost:5432/renovation_db"
-engine = create_engine(DATABASE_URL, echo=True)
-
+# Unified Data with SI_ prefixes to match BudgetEngine logic
 STANDARD_ITEMS = [
-    {"code": "SI_HYDRO_ELECTRIC", "name": "水电改造", "category": "水电", "pricing_mode": "area", "unit": "m²", "is_required": True, "aliases_json": ["水电", "改水改电", "水电路改造"]},
-    {"code": "SI_FLOOR_TILE", "name": "地面铺砖", "category": "泥瓦", "pricing_mode": "area", "unit": "m²", "is_required": True, "aliases_json": ["铺地砖", "地砖铺贴"]},
-    {"code": "SI_WALL_PAINT", "name": "墙面乳胶漆", "category": "油漆", "pricing_mode": "area", "unit": "m²", "is_required": True, "aliases_json": ["刷墙", "乳胶漆", "墙漆"]},
-    {"code": "SI_WATERPROOF", "name": "防水工程", "category": "防水", "pricing_mode": "area", "unit": "m²", "is_required": True, "aliases_json": ["做防水", "防水涂料"]},
-    {"code": "SI_CEILING", "name": "吊顶", "category": "木工", "pricing_mode": "area", "unit": "m²", "is_required": False, "aliases_json": ["石膏板吊顶", "集成吊顶"]},
-    {"code": "SI_CUSTOM_CABINET", "name": "定制柜", "category": "定制", "pricing_mode": "area", "unit": "m²", "is_required": False, "aliases_json": ["衣柜", "橱柜", "定制衣柜", "全屋定制"]},
-    {"code": "SI_DEMOLITION", "name": "拆除工程", "category": "拆改", "pricing_mode": "area", "unit": "m²", "is_required": False, "aliases_json": ["拆墙", "铲墙皮"]},
-    {"code": "SI_WALL_TILE", "name": "墙面铺砖", "category": "泥瓦", "pricing_mode": "area", "unit": "m²", "is_required": True, "aliases_json": ["贴墙砖", "墙砖"]},
-    {"code": "SI_FLOOR_WOOD", "name": "木地板铺设", "category": "安装", "pricing_mode": "area", "unit": "m²", "is_required": False, "aliases_json": ["铺地板", "木地板"]},
-    {"code": "SI_DOOR", "name": "室内门", "category": "安装", "pricing_mode": "quantity", "unit": "套", "is_required": True, "aliases_json": ["房门", "卧室门", "木门"]},
-]
-
-PRICING_RULES_CHENGDU = [
-    {"code": "SI_HYDRO_ELECTRIC", "economy": (0, 45, 5), "standard": (0, 65, 8), "premium": (0, 90, 12)},
-    {"code": "SI_FLOOR_TILE", "economy": (45, 40, 10), "standard": (80, 50, 15), "premium": (150, 65, 20)},
-    {"code": "SI_WALL_PAINT", "economy": (12, 15, 5), "standard": (25, 18, 8), "premium": (45, 22, 12)},
-    {"code": "SI_WATERPROOF", "economy": (30, 25, 5), "standard": (50, 30, 8), "premium": (80, 35, 10)},
-    {"code": "SI_CEILING", "economy": (30, 40, 10), "standard": (60, 50, 15), "premium": (100, 65, 20)},
-    {"code": "SI_CUSTOM_CABINET", "economy": (400, 80, 20), "standard": (700, 100, 30), "premium": (1200, 120, 50)},
-    {"code": "SI_DEMOLITION", "economy": (0, 30, 5), "standard": (0, 35, 8), "premium": (0, 40, 10)},
-    {"code": "SI_WALL_TILE", "economy": (40, 45, 10), "standard": (70, 55, 15), "premium": (120, 70, 20)},
-    {"code": "SI_FLOOR_WOOD", "economy": (80, 20, 5), "standard": (150, 25, 8), "premium": (300, 30, 12)},
-    {"code": "SI_DOOR", "economy": (800, 200, 50), "standard": (1500, 250, 80), "premium": (3000, 300, 100)},
+    {"code": "SI_HYDRO_ELECTRIC", "name": "水电改造", "aliases_json": ["水电", "强电", "弱电", "给排水"], "category": "水电", "pricing_mode": "area", "unit": "㎡", "description": "全屋水路及电路改造", "sort_order": 10},
+    {"code": "SI_WATERPROOF", "name": "防水施工", "aliases_json": ["防水", "刷防水", "闭水试验"], "category": "防水", "pricing_mode": "area", "unit": "㎡", "description": "厨卫阳台防水涂料施工", "sort_order": 20},
+    {"code": "SI_FLOOR_TILE", "name": "地面铺砖", "aliases_json": ["铺地砖", "地面贴砖", "地砖铺贴"], "category": "瓦工", "pricing_mode": "area", "unit": "㎡", "description": "地面瓷砖铺贴包含辅料及人工", "sort_order": 30},
+    {"code": "SI_WALL_TILE", "name": "墙面铺砖", "aliases_json": ["贴墙砖", "墙面贴砖"], "category": "瓦工", "pricing_mode": "area", "unit": "㎡", "description": "墙面瓷砖铺贴包含辅料及人工", "sort_order": 40},
+    {"code": "SI_WALL_PAINT", "name": "墙面乳胶漆", "aliases_json": ["刷漆", "面漆", "墙漆", "批腻子"], "category": "墙面", "pricing_mode": "area", "unit": "㎡", "description": "墙面基层处理及乳胶漆涂刷", "sort_order": 50},
+    {"code": "SI_CEILING", "name": "吊顶工程", "aliases_json": ["吊顶", "石膏板吊顶", "集成吊顶"], "category": "木工", "pricing_mode": "area", "unit": "㎡", "description": "造型吊顶或集成吊顶施工", "sort_order": 60},
+    {"code": "SI_DOOR", "name": "室内门", "aliases_json": ["木门", "卧室门", "房门"], "category": "安装", "pricing_mode": "quantity", "unit": "樘", "description": "室内木门及五金安装", "sort_order": 70},
+    {"code": "SI_CABINET_KITCHEN", "name": "集成橱柜", "aliases_json": ["橱柜", "地柜", "吊柜"], "category": "定制", "pricing_mode": "linear_meter", "unit": "m", "description": "整体橱柜定制安装", "sort_order": 80},
+    {"code": "SI_CUSTOM_WARDROBE", "name": "全屋定制柜", "aliases_json": ["衣柜", "定制柜", "入墙柜"], "category": "定制", "pricing_mode": "area", "unit": "㎡(投影)", "description": "衣柜及其他功能柜投影面积计算", "sort_order": 90},
+    {"code": "SI_DEMOLITION", "name": "拆除工程", "aliases_json": ["拆墙", "砸墙", "铲墙皮"], "category": "拆改", "pricing_mode": "area", "unit": "㎡", "description": "非承重墙体拆除及垃圾清运", "sort_order": 5},
 ]
 
 CITY_FACTORS = [
-    {"city_code": "510100", "city_name": "成都", "province": "四川", "city_tier": "新一线", "factor": 1.00, "has_local_price": True},
-    {"city_code": "110100", "city_name": "北京", "province": "北京", "city_tier": "一线", "factor": 1.35, "has_local_price": False},
-    {"city_code": "310100", "city_name": "上海", "province": "上海", "city_tier": "一线", "factor": 1.30, "has_local_price": False},
-    {"city_code": "440100", "city_name": "广州", "province": "广东", "city_tier": "一线", "factor": 1.20, "has_local_price": False},
-    {"city_code": "440300", "city_name": "深圳", "province": "广东", "city_tier": "一线", "factor": 1.40, "has_local_price": False},
-    {"city_code": "500100", "city_name": "重庆", "province": "重庆", "city_tier": "新一线", "factor": 0.95, "has_local_price": False},
-    {"city_code": "330100", "city_name": "杭州", "province": "浙江", "city_tier": "新一线", "factor": 1.15, "has_local_price": False},
-    {"city_code": "420100", "city_name": "武汉", "province": "湖北", "city_tier": "新一线", "factor": 1.05, "has_local_price": False},
-    {"city_code": "320100", "city_name": "南京", "province": "江苏", "city_tier": "新一线", "factor": 1.10, "has_local_price": False},
-    {"city_code": "610100", "city_name": "西安", "province": "陕西", "city_tier": "新一线", "factor": 0.95, "has_local_price": False},
+    {"city_code": "510100", "city_name": "成都", "province": "四川", "city_tier": "新一线", "factor": 1.0, "has_local_price": True},
+    {"city_code": "110100", "city_name": "北京", "province": "北京", "city_tier": "一线", "factor": 1.35, "has_local_price": True},
+    {"city_code": "310100", "city_name": "上海", "province": "上海", "city_tier": "一线", "factor": 1.35, "has_local_price": True},
+    {"city_code": "440100", "city_name": "广州", "province": "广东", "city_tier": "一线", "factor": 1.25, "has_local_price": True},
+    {"city_code": "440300", "city_name": "深圳", "province": "广东", "city_tier": "一线", "factor": 1.35, "has_local_price": True},
 ]
 
-LAYOUT_TEMPLATES = [
-    {
-        "name": "两室一厅一卫 70㎡ 标准型", "layout_type": "两室一厅一卫",
-        "bedroom_count": 2, "living_count": 1, "bathroom_count": 1,
-        "area_min": 55, "area_max": 85, "total_area": 70,
-        "rooms": [
-            {"room_name": "客厅", "room_type": "living", "area_ratio": 0.26, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "主卧", "room_type": "bedroom", "area_ratio": 0.20, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "次卧", "room_type": "bedroom", "area_ratio": 0.14, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "厨房", "room_type": "kitchen", "area_ratio": 0.09, "default_floor": "tile", "default_wall": "tile"},
-            {"room_name": "卫生间", "room_type": "bathroom", "area_ratio": 0.06, "default_floor": "tile", "default_wall": "tile"},
-            {"room_name": "阳台", "room_type": "balcony", "area_ratio": 0.07, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "玄关过道", "room_type": "hallway", "area_ratio": 0.08, "default_floor": "tile", "default_wall": "paint"},
-        ],
-    },
-    {
-        "name": "三室两厅一卫 90㎡ 标准型", "layout_type": "三室两厅一卫",
-        "bedroom_count": 3, "living_count": 2, "bathroom_count": 1,
-        "area_min": 80, "area_max": 105, "total_area": 90,
-        "rooms": [
-            {"room_name": "客厅", "room_type": "living", "area_ratio": 0.24, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "餐厅", "room_type": "dining", "area_ratio": 0.10, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "主卧", "room_type": "bedroom", "area_ratio": 0.17, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "次卧", "room_type": "bedroom", "area_ratio": 0.12, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "书房", "room_type": "bedroom", "area_ratio": 0.09, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "厨房", "room_type": "kitchen", "area_ratio": 0.08, "default_floor": "tile", "default_wall": "tile"},
-            {"room_name": "卫生间", "room_type": "bathroom", "area_ratio": 0.05, "default_floor": "tile", "default_wall": "tile"},
-            {"room_name": "阳台", "room_type": "balcony", "area_ratio": 0.07, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "过道", "room_type": "hallway", "area_ratio": 0.08, "default_floor": "tile", "default_wall": "paint"},
-        ],
-    },
-    {
-        "name": "三室两厅两卫 120㎡ 标准型", "layout_type": "三室两厅两卫",
-        "bedroom_count": 3, "living_count": 2, "bathroom_count": 2,
-        "area_min": 105, "area_max": 140, "total_area": 120,
-        "rooms": [
-            {"room_name": "客厅", "room_type": "living", "area_ratio": 0.22, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "餐厅", "room_type": "dining", "area_ratio": 0.08, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "主卧", "room_type": "bedroom", "area_ratio": 0.16, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "次卧", "room_type": "bedroom", "area_ratio": 0.11, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "书房", "room_type": "bedroom", "area_ratio": 0.08, "default_floor": "wood", "default_wall": "paint"},
-            {"room_name": "厨房", "room_type": "kitchen", "area_ratio": 0.07, "default_floor": "tile", "default_wall": "tile"},
-            {"room_name": "主卫", "room_type": "bathroom", "area_ratio": 0.05, "default_floor": "tile", "default_wall": "tile"},
-            {"room_name": "客卫", "room_type": "bathroom", "area_ratio": 0.04, "default_floor": "tile", "default_wall": "tile"},
-            {"room_name": "阳台", "room_type": "balcony", "area_ratio": 0.06, "default_floor": "tile", "default_wall": "paint"},
-            {"room_name": "过道", "room_type": "hallway", "area_ratio": 0.07, "default_floor": "tile", "default_wall": "paint"},
-        ],
-    },
+PRICING_RULES_MAPPING = {
+    "SI_HYDRO_ELECTRIC": {"economy": 100, "standard": 135, "premium": 180},
+    "SI_WATERPROOF": {"economy": 60, "standard": 80, "premium": 110},
+    "SI_FLOOR_TILE": {"economy": 120, "standard": 180, "premium": 280},
+    "SI_WALL_TILE": {"economy": 110, "standard": 160, "premium": 240},
+    "SI_WALL_PAINT": {"economy": 40, "standard": 65, "premium": 90},
+    "SI_CEILING": {"economy": 120, "standard": 180, "premium": 260},
+    "SI_DOOR": {"economy": 1500, "standard": 2500, "premium": 4000},
+    "SI_CABINET_KITCHEN": {"economy": 1800, "standard": 2800, "premium": 4500},
+    "SI_CUSTOM_WARDROBE": {"economy": 800, "standard": 1200, "premium": 1800},
+    "SI_DEMOLITION": {"economy": 40, "standard": 60, "premium": 80},
+}
+
+GLOSSARY_TERMS = [
+    {"term": "闭水试验", "category": "防水", "definition": "防水施工后蓄水检查是否渗漏", "purpose": "验证防水质量", "risk": "不做后期漏水维修难", "tags_json": ["验收", "核心"]},
+    {"term": "铲墙皮", "category": "拆改", "definition": "去除原有墙面疏松层", "purpose": "确保新腻子附着力", "risk": "不铲可能导致墙面脱落", "tags_json": ["基层"]},
+    {"term": "耐水腻子", "category": "墙面", "definition": "具有防潮性能的墙面找平材料", "purpose": "防止墙面受潮发霉", "risk": "普通腻子易起皮", "tags_json": ["材料"]},
 ]
 
-GLOSSARY = [
-    {"term": "水电改造", "category": "水电", "definition": "对原有水路和电路进行重新布局和改造", "purpose": "满足新的用水用电需求", "risk": "隐蔽工程，完工后难以修改", "common_pitfall": "报价按米计算时注意是否包含开槽费", "verify_method": "打压测试0.8MPa保持30分钟不掉压", "tags_json": ["水电", "隐蔽工程"]},
-    {"term": "闭水试验", "category": "防水", "definition": "在防水施工完成后蓄水检验防水效果", "purpose": "验证防水层是否渗漏", "risk": "不做可能导致漏水到楼下", "common_pitfall": "蓄水时间不够（至少48小时）", "verify_method": "蓄水48小时后检查楼下天花板无渗漏", "tags_json": ["防水", "验收"]},
-    {"term": "腻子", "category": "油漆", "definition": "墙面找平用的膏状材料，刷漆前的基层处理", "purpose": "使墙面平整光滑，便于刷漆", "risk": "使用劣质腻子可能导致墙面开裂脱落", "common_pitfall": "确认是否为耐水腻子", "verify_method": "干燥后用灯光侧照检查平整度", "tags_json": ["油漆", "墙面"]},
-    {"term": "美缝", "category": "泥瓦", "definition": "瓷砖铺贴后对缝隙进行填充美化处理", "purpose": "防水防霉，美观耐用", "risk": "不做美缝容易发霉发黑", "common_pitfall": "美缝剂品质差异大，注意选环保产品", "verify_method": "检查填充饱满、颜色一致、无气泡", "tags_json": ["泥瓦", "瓷砖"]},
-    {"term": "找平", "category": "泥瓦", "definition": "用水泥砂浆将不平整的地面处理平整", "purpose": "为铺设地板或地砖提供平整基层", "risk": "找平不好会导致地板起翘、空鼓", "common_pitfall": "自流平和水泥砂浆找平价格差异较大", "verify_method": "用2米靠尺检查，误差不超过3mm", "tags_json": ["泥瓦", "地面"]},
-]
+async def seed_data():
+    engine = create_async_engine(settings.DATABASE_URL)
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+    async with async_session() as db:
+        # 1. System Config (AI Config)
+        ai_config_val = {
+            "activeModelId": "default-gpt-4o",
+            "aiModels": [
+                {
+                    "id": "default-gpt-4o",
+                    "name": "GPT-4o (Default)",
+                    "baseUrl": settings.AI_BASE_URL,
+                    "apiKey": settings.AI_API_KEY,
+                    "models": [settings.AI_MODEL]
+                }
+            ]
+        }
+        res = await db.execute(select(SystemConfig).where(SystemConfig.key == "ai_config"))
+        if not res.scalars().first():
+            db.add(SystemConfig(key="ai_config", value=ai_config_val, description="AI Global Configuration"))
 
-def seed():
-    with Session(engine) as db:
-        # 1. 标准项目
-        item_map = {}
-        for s in STANDARD_ITEMS:
-            item = PricingStandardItem(**s)
-            db.add(item)
-            db.flush()
-            item_map[s["code"]] = item.id
-        print(f"✅ 写入 {len(STANDARD_ITEMS)} 条标准项目")
+        # 2. City Factors
+        for cf_data in CITY_FACTORS:
+            res = await db.execute(select(CityFactor).where(CityFactor.city_code == cf_data["city_code"]))
+            if not res.scalars().first():
+                db.add(CityFactor(**cf_data))
 
-        # 2. 价格规则
-        count = 0
-        for rule in PRICING_RULES_CHENGDU:
-            code = rule["code"]
-            for tier_name in ["economy", "standard", "premium"]:
-                mat, lab, acc = rule[tier_name]
-                db.add(PricingRule(
-                    city_code="510100",
-                    standard_item_id=item_map[code],
-                    tier=tier_name,
-                    material_unit_price=mat,
-                    labor_unit_price=lab,
-                    accessory_unit_price=acc,
-                    unit="m²",
-                    loss_rate=0.05,
-                    price_source="行业调研2025",
-                ))
-                count += 1
-        db.flush()
-        print(f"✅ 写入 {count} 条价格规则")
+        # 3. Standard Items & Rules
+        for item_data in STANDARD_ITEMS:
+            res = await db.execute(select(PricingStandardItem).where(PricingStandardItem.code == item_data["code"]))
+            std_item = res.scalars().first()
+            if not std_item:
+                std_item = PricingStandardItem(**item_data)
+                db.add(std_item)
+                await db.flush()
 
-        # 3. 城市系数
-        for cf in CITY_FACTORS:
-            db.add(CityFactor(**cf))
-        db.flush()
-        print(f"✅ 写入 {len(CITY_FACTORS)} 个城市系数")
+            if item_data["code"] in PRICING_RULES_MAPPING:
+                tier_prices = PRICING_RULES_MAPPING[item_data["code"]]
+                for tier, total_price in tier_prices.items():
+                    res = await db.execute(
+                        select(PricingRule).where(
+                            PricingRule.standard_item_id == std_item.id,
+                            PricingRule.tier == tier,
+                            PricingRule.city_code == "510100"
+                        )
+                    )
+                    if not res.scalars().first():
+                        db.add(PricingRule(
+                            city_code="510100",
+                            standard_item_id=std_item.id,
+                            tier=tier,
+                            material_unit_price=total_price * 0.6,
+                            labor_unit_price=total_price * 0.4,
+                            unit=item_data["unit"],
+                            price_source="行业基准2025"
+                        ))
 
-        # 4. 户型模板
-        for lt in LAYOUT_TEMPLATES:
-            rooms_data = lt.pop("rooms")
-            template = LayoutTemplate(**lt)
-            db.add(template)
-            db.flush()
-            for i, r in enumerate(rooms_data):
-                db.add(RoomTemplate(
-                    layout_template_id=template.id,
-                    room_name=r["room_name"],
-                    room_type=r["room_type"],
-                    area_ratio=r["area_ratio"],
-                    default_floor=r["default_floor"],
-                    default_wall=r["default_wall"],
-                    sort_order=i,
-                ))
-            db.flush()
-        print(f"✅ 写入 {len(LAYOUT_TEMPLATES)} 个户型模板")
+        # 4. Layout Template (Sample)
+        for layout_name in ["2室1厅1卫", "3室2厅1卫"]:
+            res = await db.execute(select(LayoutTemplate).where(LayoutTemplate.layout_type == layout_name))
+            if not res.scalars().first():
+                tpl = LayoutTemplate(name=f"标准{layout_name}模板", layout_type=layout_name, bedroom_count=3 if "3室" in layout_name else 2, living_count=2 if "2厅" in layout_name else 1, bathroom_count=1, area_min=60, area_max=120)
+                db.add(tpl)
+                await db.flush()
+                rooms = [{"room_name": "客厅", "room_type": "living", "area_ratio": 0.25}, {"room_name": "餐厅", "room_type": "dining", "area_ratio": 0.10}, {"room_name": "厨房", "room_type": "kitchen", "area_ratio": 0.08}, {"room_name": "卫生间", "room_type": "bathroom", "area_ratio": 0.07}]
+                for r in rooms: db.add(RoomTemplate(layout_template_id=tpl.id, **r))
 
-        # 5. 词典
-        for g in GLOSSARY:
-            db.add(GlossaryTerm(**g))
-        db.flush()
-        print(f"✅ 写入 {len(GLOSSARY)} 条装修词典")
+        # 5. Glossary Terms
+        for g_data in GLOSSARY_TERMS:
+            res = await db.execute(select(GlossaryTerm).where(GlossaryTerm.term == g_data["term"]))
+            if not res.scalars().first():
+                db.add(GlossaryTerm(**g_data))
 
-        db.commit()
-        print("\n🎉 所有种子数据写入完成！")
-
+        await db.commit()
+        print("🎉 Seeding completed successfully!")
 
 if __name__ == "__main__":
-    seed()
+    asyncio.run(seed_data())

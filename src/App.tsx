@@ -17,6 +17,7 @@ const Glossary = lazy(() => import('@/pages/Glossary'));
 const MyProject = lazy(() => import('@/pages/MyProject'));
 const Settings = lazy(() => import('@/pages/Settings'));
 const QuoteCheck = lazy(() => import('@/pages/QuoteCheck'));
+const ContractCheck = lazy(() => import('@/pages/ContractCheck'));
 const Construction = lazy(() => import('@/pages/Construction'));
 const Checklist = lazy(() => import('@/pages/Construction/Checklist'));
 const Purchases = lazy(() => import('@/pages/Construction/Purchases'));
@@ -61,6 +62,7 @@ const App: React.FC = () => {
                 <Route path="/my-project" element={<ProtectedPage><MyProject /></ProtectedPage>} />
                 <Route path="/settings" element={<AdminPage><Settings /></AdminPage>} />
                 <Route path="/quote-check" element={<ProtectedPage><QuoteCheck /></ProtectedPage>} />
+                <Route path="/contract-check" element={<ProtectedPage><ContractCheck /></ProtectedPage>} />
                 <Route path="/construction" element={<ProtectedPage><Construction /></ProtectedPage>} />
                 <Route path="/construction/checklist/:phase?" element={<ProtectedPage><Checklist /></ProtectedPage>} />
                 <Route path="/construction/purchases" element={<ProtectedPage><Purchases /></ProtectedPage>} />

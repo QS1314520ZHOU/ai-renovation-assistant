@@ -198,7 +198,7 @@ export default function Construction() {
             ) : (
                 <div style={{ padding: '0 16px' }}>
                     {PHASE_LIST.filter(p => p.phase !== 'warranty').map((phaseInfo, idx) => {
-                        const record = phases.find(p => (p as any).key === phaseInfo.phase);
+                        const record = phases.find(p => p.phase === phaseInfo.phase);
                         const progress = getPhaseProgress(phaseInfo.phase);
                         const isActive = currentPhase === phaseInfo.phase;
                         const isCompleted = record?.status === 'completed';

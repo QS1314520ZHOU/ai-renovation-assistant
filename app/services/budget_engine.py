@@ -11,14 +11,29 @@ class BudgetEngineService:
         self.db = db
 
     async def calculate(self, req: BudgetCalcRequest, user_id: str) -> BudgetResultOut:
+        # 0. 城市解析
+        city_code = req.city_code
+        if not city_code and req.city_name:
+            # 根据名称匹配城市码
+            city_res = await self.db.execute(
+                select(CityFactor).where(CityFactor.city_name.like(f"%{req.city_name}%"))
+            )
+            city_obj = city_res.scalars().first()
+            if city_obj:
+                city_code = city_obj.city_code
+            else:
+                city_code = "510100" # 默认成都
+        elif not city_code:
+            city_code = "510100"
+
         # 1. 获取城市系数
-        city_factor = await self._get_city_factor(req.city_code)
+        city_factor = await self._get_city_factor(city_code)
 
         # 2. 匹配户型模板，生成房间
         rooms = await self._generate_rooms(req.layout_type, req.inner_area)
 
         # 3. 获取价格规则
-        rules = await self._get_pricing_rules(req.city_code)
+        rules = await self._get_pricing_rules(city_code)
 
         # 4. 获取标准项详情 (用于匹配 code)
         std_ids = {r.standard_item_id for r in rules}

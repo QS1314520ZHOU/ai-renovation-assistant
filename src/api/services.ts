@@ -75,7 +75,8 @@ import { BudgetResult, BudgetScheme } from '@/types';
 export const budgetApi = {
     calculate: (data: {
         project_id?: string;
-        city_code: string;
+        city_code?: string;
+        city_name?: string;
         inner_area: number;
         layout_type: string;
         tier?: string;
@@ -172,6 +173,36 @@ export const quoteApi = {
 
     getReport: (quoteId: string) =>
         http.get<any>(`/quotes/${quoteId}/report`),
+};
+
+// ---- 合同体检 ----
+export const contractApi = {
+    upload: (projectId: string, file: File) => {
+        const formData = new FormData();
+        formData.append('project_id', projectId);
+        formData.append('file', file);
+        return http.post<any>('/contracts/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    },
+
+    checkText: (projectId: string, text: string) =>
+        http.post<any>('/contracts/text', { project_id: projectId, text }),
+
+    getReport: (reportId: string) =>
+        http.get<any>(`/contracts/report/${reportId}`),
+};
+
+// ---- 材料推荐 ----
+export const materialApi = {
+    getRecommendation: (projectId: string, itemId: string, totalBudget: number) => {
+        const params = new URLSearchParams({
+            project_id: projectId,
+            item_id: itemId,
+            total_budget: totalBudget.toString()
+        });
+        return http.get<any>(`/materials/recommendation?${params.toString()}`);
+    }
 };
 
 // ---- 系统配置 ----

@@ -3,7 +3,8 @@ from pydantic import BaseModel
 
 class BudgetCalcRequest(BaseModel):
     project_id: uuid.UUID | None = None
-    city_code: str
+    city_code: str | None = None
+    city_name: str | None = None
     inner_area: float
     layout_type: str
     tier: str = "standard"

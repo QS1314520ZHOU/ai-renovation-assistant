@@ -9,6 +9,7 @@ import { formatMoney, tierLevelLabel, tierLevelColor, categoryLabel } from '@/ut
 import { TierLevel, BudgetScheme, BudgetItem } from '@/types';
 import TermItem from '@/components/Glossary/TermItem';
 import FeedbackWidget from '@/components/Feedback/FeedbackWidget';
+import MaterialRecommendationModal from '@/components/Budget/MaterialRecommendationModal';
 
 
 export default function BudgetResult() {
@@ -16,6 +17,10 @@ export default function BudgetResult() {
     const { budgetResult, currentHouse } = useProjectStore();
     const [activeTier, setActiveTier] = useState<TierLevel>(currentHouse?.tierLevel || 'standard');
     const { init: initGlossary } = useGlossaryStore();
+
+    // Material Recommendation State
+    const [recModalVisible, setRecModalVisible] = useState(false);
+    const [activeItemForRec, setActiveItemForRec] = useState<{ id: string, name: string } | null>(null);
 
     useEffect(() => {
         initGlossary();
@@ -127,7 +132,7 @@ export default function BudgetResult() {
                     >
                         <div style={{ fontSize: 12, opacity: 0.8 }}>{tierLevelLabel(tier)}</div>
                         <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
-                            {formatMoney(budgetResult[tier]?.total_amount || 0)}
+                            {formatMoney(budgetResult.schemes?.find(s => s.tier === tier)?.total_amount || 0)}
                         </div>
                     </div>
                 ))}
@@ -181,8 +186,23 @@ export default function BudgetResult() {
                                             borderBottom: '1px solid #F3F4F6',
                                         }}>
                                             <div>
-                                                <div style={{ color: 'var(--color-text)' }}>
+                                                <div style={{ color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                                                     <TermItem name={item.item_name} />
+                                                    {(item.material_unit_price > 0 || item.category === '主材' || item.category === '定制') && (
+                                                        <span
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveItemForRec({ id: item.id, name: item.item_name });
+                                                                setRecModalVisible(true);
+                                                            }}
+                                                            style={{
+                                                                fontSize: 10, color: 'var(--color-primary)', background: '#EEF2FF',
+                                                                padding: '2px 6px', borderRadius: 10, cursor: 'pointer',
+                                                                display: 'flex', alignItems: 'center', gap: 2
+                                                            }}>
+                                                            🤖 推荐
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div style={{ color: 'var(--color-text-light)', fontSize: 11 }}>
                                                     {item.quantity}{item.unit} × {item.material_unit_price + item.labor_unit_price + item.accessory_unit_price}元/{item.unit}
@@ -222,6 +242,15 @@ export default function BudgetResult() {
                     保存报告
                 </Button>
             </div>
+
+            <MaterialRecommendationModal
+                visible={recModalVisible}
+                onClose={() => { setRecModalVisible(false); setActiveItemForRec(null); }}
+                projectId={currentHouse.id || ''}
+                itemId={activeItemForRec?.id || ''}
+                itemName={activeItemForRec?.name || ''}
+                totalBudget={currentScheme.total_amount || 100000}
+            />
         </div>
     );
 }

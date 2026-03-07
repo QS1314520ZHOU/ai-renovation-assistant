@@ -6,6 +6,7 @@ const features = [
   { icon: '🤖', title: '先算大概多少钱', desc: 'AI帮你快速出预算', path: '/ai-consult', color: '#EEF2FF' },
   { icon: '📋', title: '直接填表算', desc: '手动填写快速估算', path: '/quick-budget', color: '#F0FDF4' },
   { icon: '🔍', title: '帮我看报价', desc: '报价单体检找问题', path: '/quote-check', color: '#FEF3C7' },
+  { icon: '⚖️', title: '合同避坑审核', desc: 'AI审查核心霸王条款', path: '/contract-check', color: '#E0E7FF' },
   { icon: '⚠️', title: '检查漏了什么', desc: '智能漏项提醒', path: '/missing-check', color: '#FFF7ED' },
   { icon: '🏗️', title: '施工陪跑', desc: '进度·采购·验收·付款', path: '/construction', color: '#ECFDF5' },
   { icon: '📖', title: '这个词啥意思', desc: '装修术语翻译器', path: '/glossary', color: '#FDF2F8' },
