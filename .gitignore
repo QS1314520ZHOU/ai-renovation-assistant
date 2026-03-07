@@ -35,3 +35,6 @@ logs/
 
 # Alembic
 alembic/versions/*.pyc
+
+# Diagnostics
+tsc_diagnostics.txt

@@ -156,7 +156,7 @@ class ContractService:
         self.db.add(report)
         await self.db.commit()
 
-       return {
+    return {
             "contract_id": str(upload.id),
             "report_id": str(report.id),
             "score": report.overall_score,
