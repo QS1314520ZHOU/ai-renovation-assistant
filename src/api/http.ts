@@ -1,5 +1,29 @@
 // src/api/http.ts
 
+function toCamel(obj: any): any {
+    if (Array.isArray(obj)) return obj.map(toCamel);
+    if (obj !== null && typeof obj === 'object') {
+        return Object.keys(obj).reduce((result, key) => {
+            const camelKey = key.replace(/([-_][a-z])/gi, ($1) => $1.toUpperCase().replace('-', '').replace('_', ''));
+            result[camelKey] = toCamel(obj[key]);
+            return result;
+        }, {} as any);
+    }
+    return obj;
+}
+
+function toSnake(obj: any): any {
+    if (Array.isArray(obj)) return obj.map(toSnake);
+    if (obj !== null && typeof obj === 'object') {
+        return Object.keys(obj).reduce((result, key) => {
+            const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+            result[snakeKey] = toSnake(obj[key]);
+            return result;
+        }, {} as any);
+    }
+    return obj;
+}
+
 const BASE = '/api/v1';
 
 interface ApiResponse<T = any> {
@@ -17,9 +41,15 @@ async function request<T = any>(
         ...(options.headers as Record<string, string>),
     };
 
-    // 如果不是 FormData，则设置 JSON Content-Type
+    // 如果不是 FormData，则设置 JSON Content-Type 并转换 body 为 snake_case
     if (!(options.body instanceof FormData)) {
         headers['Content-Type'] = 'application/json';
+        if (options.body && typeof options.body === 'string') {
+            try {
+                const parsedBody = JSON.parse(options.body);
+                options.body = JSON.stringify(toSnake(parsedBody));
+            } catch (e) { /* ignore */ }
+        }
     }
 
     if (token) {
@@ -44,7 +74,7 @@ async function request<T = any>(
         throw new Error(json.message || '请求失败');
     }
 
-    return json.data;
+    return toCamel(json.data);
 }
 
 export const http = {

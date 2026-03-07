@@ -5,6 +5,8 @@ import { CameraOutline } from 'antd-mobile-icons';
 import { quoteApi } from '@/api/services';
 import { useProjectStore } from '@/store';
 import { formatMoney } from '@/utils/format';
+import { useGlossaryStore } from '@/store/glossaryStore';
+import TermItem from '@/components/Glossary/TermItem';
 import FeedbackWidget from '@/components/Feedback/FeedbackWidget';
 
 interface QuoteItem {
@@ -27,11 +29,16 @@ interface QuoteReport {
 export default function QuoteCheck() {
     const navigate = useNavigate();
     const { currentHouse } = useProjectStore();
+    const { init: initGlossary } = useGlossaryStore();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [report, setReport] = useState<QuoteReport | null>(null);
     const [parsePhase, setParsePhase] = useState<string>('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    React.useEffect(() => {
+        initGlossary();
+    }, [initGlossary]);
 
     const handleTextAnalyze = async () => {
         if (!input.trim()) {
@@ -187,7 +194,9 @@ export default function QuoteCheck() {
                                 border: item.risks.length > 0 ? '1px solid #FEE2E2' : '1px solid #F3F4F6'
                             }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                    <span style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</span>
+                                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                                        <TermItem name={item.name} />
+                                    </span>
                                     <span style={{ fontWeight: 600 }}>{formatMoney(item.subtotal || 0)}</span>
                                 </div>
                                 <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginBottom: 8 }}>

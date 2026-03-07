@@ -4,49 +4,22 @@ import { NavBar, Tabs, Tag, Toast, Button, Collapse, Popover, DotLoading } from 
 import { QuestionCircleOutline } from 'antd-mobile-icons';
 import ReactECharts from 'echarts-for-react';
 import { useProjectStore } from '@/store';
+import { useGlossaryStore } from '@/store/glossaryStore';
 import { formatMoney, tierLevelLabel, tierLevelColor, categoryLabel } from '@/utils/format';
 import { TierLevel, BudgetScheme, BudgetItem } from '@/types';
-import { glossaryApi } from '@/api/services';
+import TermItem from '@/components/Glossary/TermItem';
 import FeedbackWidget from '@/components/Feedback/FeedbackWidget';
 
-// 术语辅助组件
-const TermItem = ({ item, glossary }: { item: BudgetItem, glossary: any[] }) => {
-    const term = glossary.find(g => g.term === item.item_name || (g.aliases && g.aliases.includes(item.item_name)));
-
-    if (!term) return <span>{item.item_name}</span>;
-
-    return (
-        <Popover
-            content={
-                <div style={{ padding: 12, maxWidth: 240, fontSize: 13 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-primary)' }}>{term.term}</div>
-                    <div style={{ marginBottom: 8, color: '#4B5563' }}>{term.definition}</div>
-                    {term.risk && (
-                        <div style={{ color: '#DC2626', fontSize: 12, borderTop: '1px solid #F3F4F6', paddingTop: 8 }}>
-                            ⚠️ 风险：{term.risk}
-                        </div>
-                    )}
-                </div>
-            }
-            trigger='click'
-            placement='top-start'
-        >
-            <span style={{ color: 'var(--color-primary)', textDecoration: 'underline', textDecorationStyle: 'dotted', cursor: 'pointer' }}>
-                {item.item_name} <QuestionCircleOutline style={{ fontSize: 12, verticalAlign: 'middle' }} />
-            </span>
-        </Popover>
-    );
-};
 
 export default function BudgetResult() {
     const navigate = useNavigate();
     const { budgetResult, currentHouse } = useProjectStore();
     const [activeTier, setActiveTier] = useState<TierLevel>(currentHouse?.tierLevel || 'standard');
-    const [glossary, setGlossary] = useState<any[]>([]);
+    const { init: initGlossary } = useGlossaryStore();
 
     useEffect(() => {
-        glossaryApi.list().then(setGlossary).catch(console.error);
-    }, []);
+        initGlossary();
+    }, [initGlossary]);
 
     if (!budgetResult || !currentHouse) {
         return (
@@ -209,7 +182,7 @@ export default function BudgetResult() {
                                         }}>
                                             <div>
                                                 <div style={{ color: 'var(--color-text)' }}>
-                                                    <TermItem item={item} glossary={glossary} />
+                                                    <TermItem name={item.item_name} />
                                                 </div>
                                                 <div style={{ color: 'var(--color-text-light)', fontSize: 11 }}>
                                                     {item.quantity}{item.unit} × {item.material_unit_price + item.labor_unit_price + item.accessory_unit_price}元/{item.unit}

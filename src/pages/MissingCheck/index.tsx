@@ -3,11 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { NavBar, Tag, Empty } from 'antd-mobile';
 import { useProjectStore } from '@/store';
 import { formatMoney } from '@/utils/format';
+import { useGlossaryStore } from '@/store/glossaryStore';
+import TermItem from '@/components/Glossary/TermItem';
 import FeedbackWidget from '@/components/Feedback/FeedbackWidget';
 
 export default function MissingCheck() {
     const navigate = useNavigate();
     const { budgetResult } = useProjectStore();
+    const { init: initGlossary } = useGlossaryStore();
+
+    React.useEffect(() => {
+        initGlossary();
+    }, [initGlossary]);
 
     const items = budgetResult?.missingItems || [];
 
@@ -54,7 +61,9 @@ export default function MissingCheck() {
                             boxShadow: 'var(--shadow-sm)',
                         }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 16, fontWeight: 600 }}>{item.itemName}</span>
+                                <span style={{ fontSize: 16, fontWeight: 600 }}>
+                                    <TermItem name={item.itemName} />
+                                </span>
                                 <span className={`risk-${item.riskLevel}`}>
                                     {item.riskLevel === 'high' ? '高风险' : item.riskLevel === 'medium' ? '中风险' : '低风险'}
                                 </span>

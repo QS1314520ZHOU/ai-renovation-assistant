@@ -2,8 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, TextArea, Toast, DotLoading } from 'antd-mobile';
 import { useProjectStore } from '@/store';
-import { chatCompletion, CONSULT_SYSTEM_PROMPT, parseAIResponse } from '@/api/ai';
-import { budgetApi } from '@/api/services';
+import { aiApi, budgetApi } from '@/api/services';
 import { HouseProfile, TierLevel, BudgetResult } from '@/types';
 import { v4 as uuid } from 'uuid';
 
@@ -15,22 +14,23 @@ interface ChatMsg {
     loading?: boolean;
 }
 
-const GREETING = `你好！我是你的AI装修预算顾问 🏠
+const GREETING = `你好！我是你的 AI 装修预算顾问 🏠
 
 告诉我你家的情况，比如：
-"我家108平新房，成都，三室两厅一卫，准备普通装修，预算18万左右"
+"我家 108 平新房，成都，三室两厅一卫，准备普通装修，预算 18 万左右"
 
-说得越详细，预算越准确！你也可以直接说"帮我算一下"，我会用目前信息先出个结果。`;
+说得越详细，预算越准确！你也可以直接说 "帮我算一下"，我会用目前信息先出个结果。`;
 
 export default function AIConsult() {
     const navigate = useNavigate();
-    const { currentHouse, updateCurrentHouse, setCurrentHouse, setBudgetResult, addAIMessage } = useProjectStore();
+    const { currentHouse, updateCurrentHouse, setBudgetResult } = useProjectStore();
     const [messages, setMessages] = useState<ChatMsg[]>([
         { id: 'greeting', role: 'assistant', content: GREETING },
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [collectedFields, setCollectedFields] = useState<Record<string, any>>({});
+    const [sessionId, setSessionId] = useState<string | undefined>();
     const chatEndRef = useRef<HTMLDivElement>(null);
     const askCountRef = useRef(0);
 
@@ -49,26 +49,22 @@ export default function AIConsult() {
         setLoading(true);
 
         try {
-            const history = messages
-                .filter(m => !m.loading)
-                .map(m => ({ role: m.role, content: m.content }));
-
-            const response = await chatCompletion({
-                messages: [
-                    { role: 'system', content: CONSULT_SYSTEM_PROMPT },
-                    ...history,
-                    { role: 'user', content: text },
-                ],
-                temperature: 0.7,
-                maxTokens: 1500,
+            const res = await aiApi.chat({
+                session_id: sessionId,
+                project_id: currentHouse?.id || undefined,
+                message: text,
+                session_type: 'consult'
             });
 
-            const { json, text: displayText } = parseAIResponse(response);
+            if (res.session_id && !sessionId) {
+                setSessionId(res.session_id);
+            }
+
             askCountRef.current += 1;
 
-            // 提取字段
-            if (json?.extracted_fields) {
-                const newFields = { ...collectedFields, ...json.extracted_fields };
+            // 提取字段 (后端返回 extracted_fields)
+            if (res.extracted_fields) {
+                const newFields = { ...collectedFields, ...res.extracted_fields };
                 setCollectedFields(newFields);
                 updateCurrentHouse(mapFieldsToHouse(newFields));
             }
@@ -76,24 +72,24 @@ export default function AIConsult() {
             // 更新消息
             setMessages(prev => prev.map(m =>
                 m.id === loadingMsg.id
-                    ? { ...m, content: displayText || response, loading: false, fields: json?.extracted_fields }
+                    ? { ...m, content: res.reply, loading: false, fields: res.extracted_fields || undefined }
                     : m
             ));
 
             // 检查是否可以生成预算
-            if (json?.phase === 'completed' || askCountRef.current >= 8 || text.includes('先算') || text.includes('算一下')) {
-                handleGenerateBudget(json?.extracted_fields);
+            if (res.is_complete || askCountRef.current >= 8 || text.includes('先算') || text.includes('算一下')) {
+                handleGenerateBudget(res.extracted_fields || undefined);
             }
         } catch (error: any) {
             setMessages(prev => prev.map(m =>
                 m.id === loadingMsg.id
-                    ? { ...m, content: `抱歉，AI服务暂时不可用。${error.message || ''}你可以去"直接填表算"页面手动输入。`, loading: false }
+                    ? { ...m, content: `抱歉，AI 服务暂时不可用。${error.message || ''} 你可以去 "直接填表算" 页面手动输入。`, loading: false }
                     : m
             ));
         } finally {
             setLoading(false);
         }
-    }, [input, loading, messages, collectedFields]);
+    }, [input, loading, messages, collectedFields, sessionId, currentHouse, updateCurrentHouse]);
 
     const handleGenerateBudget = async (extraFields?: Record<string, any>) => {
         const fields = { ...collectedFields, ...extraFields };

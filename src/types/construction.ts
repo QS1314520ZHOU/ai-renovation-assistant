@@ -6,7 +6,10 @@ export type ConstructionPhase =
     | 'tiling'              // 瓦工阶段
     | 'carpentry'           // 木工阶段
     | 'painting'            // 油工阶段
-    | 'installation'        // 安装阶段
+    | 'cabinet_install'     // 橱柜安装
+    | 'door_window'         // 门窗安装
+    | 'final_install'       // 终端安装
+    | 'installation'        // 安装阶段 (通用)
     | 'cleaning'            // 保洁阶段
     | 'completed'           // 竣工验收
     | 'warranty';           // 维保期
@@ -99,8 +102,20 @@ export interface PurchaseItem {
     mustBuyBefore: string;
     needMeasureFirst: boolean;
     estimatedBudget: string;
+    estimatedPrice?: number; // 新增：数值型预计单价
+    actualPrice?: number;    // 新增：数值型实际单价
     tips: string;
     purchased: boolean;
     purchasedAt?: string;
     actualCost?: number;
+}
+
+export interface AppNotification {
+    id: string;
+    type: 'info' | 'warning' | 'error' | 'success';
+    title: string;
+    content: string;
+    link?: string;
+    read: boolean;
+    createdAt: string;
 }

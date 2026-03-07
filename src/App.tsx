@@ -24,6 +24,8 @@ const ConstructionLog = lazy(() => import('@/pages/Construction/ConstructionLog'
 const Payments = lazy(() => import('@/pages/Construction/Payments'));
 const PostRenovation = lazy(() => import('@/pages/Construction/PostRenovation'));
 
+const AIInspect = lazy(() => import('@/pages/Construction/AIInspect'));
+
 const Fallback = () => (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <Loading color="primary" />
@@ -60,11 +62,12 @@ const App: React.FC = () => {
                 <Route path="/settings" element={<AdminPage><Settings /></AdminPage>} />
                 <Route path="/quote-check" element={<ProtectedPage><QuoteCheck /></ProtectedPage>} />
                 <Route path="/construction" element={<ProtectedPage><Construction /></ProtectedPage>} />
-                <Route path="/construction/checklist" element={<ProtectedPage><Checklist /></ProtectedPage>} />
+                <Route path="/construction/checklist/:phase?" element={<ProtectedPage><Checklist /></ProtectedPage>} />
                 <Route path="/construction/purchases" element={<ProtectedPage><Purchases /></ProtectedPage>} />
                 <Route path="/construction/log" element={<ProtectedPage><ConstructionLog /></ProtectedPage>} />
                 <Route path="/construction/payments" element={<ProtectedPage><Payments /></ProtectedPage>} />
                 <Route path="/construction/post" element={<ProtectedPage><PostRenovation /></ProtectedPage>} />
+                <Route path="/construction/ai-inspect" element={<ProtectedPage><AIInspect /></ProtectedPage>} />
 
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -1,17 +1,20 @@
-// src/store/constructionStore.ts
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { CHECKLIST_DATA } from '@/engine/constructionData';
+import {
+    ConstructionPhase,
+    PhaseInfo as BasePhaseInfo,
+    ChecklistItem as BaseChecklistItem,
+    PurchaseItem as BasePurchaseItem,
+    ConstructionLog,
+    PaymentRecord as BasePaymentRecord
+} from '@/types';
 
-// ---- 类型定义 ----
-export interface PhaseInfo {
+// ---- 扩展类型以适应 Store 状态 ----
+export interface PhaseInfo extends Omit<BasePhaseInfo, 'phase' | 'order' | 'typicalDurationDays'> {
     key: string;
-    name: string;
-    icon: string;
     duration: string;
-    description: string;
     status: 'pending' | 'active' | 'completed';
-    startDate?: string;
-    endDate?: string;
 }
 
 export interface ChecklistItem {
@@ -38,15 +41,8 @@ export interface PurchaseItem {
     deadline?: string;
 }
 
-export interface ConstructionLog {
-    id: string;
-    phase: string;
-    date: string;
-    title: string;
-    content: string;
-    photos: string[];
-    createdAt: string;
-}
+// Re-export ConstructionLog from @/types to maintain interface compatibility
+export type { ConstructionLog } from '@/types';
 
 export interface PaymentRecord {
     id: string;
@@ -63,7 +59,7 @@ export interface ConstructionState {
     // 状态
     projectId: string | null;
     phases: PhaseInfo[];
-    currentPhase: string;
+    currentPhase: ConstructionPhase;
     checklists: ChecklistItem[];
     purchases: PurchaseItem[];
     logs: ConstructionLog[];
@@ -72,11 +68,12 @@ export interface ConstructionState {
 
     // 操作
     initProject: (projectId: string, startDate?: string) => void;
-    setCurrentPhase: (phase: string) => void;
-    updatePhaseStatus: (phase: string, status: PhaseInfo['status']) => void;
+    setCurrentPhase: (phase: ConstructionPhase) => void;
+    updatePhase: (phase: string, updates: Partial<PhaseInfo>) => void;
+    completePhase: (phase: string) => void;
 
     // 验收清单
-    toggleChecklist: (id: string) => void;
+    toggleChecklist: (id: string, phase: string) => void;
     updateChecklistNote: (id: string, note: string) => void;
 
     // 采购
@@ -88,11 +85,11 @@ export interface ConstructionState {
     deleteLog: (id: string) => void;
 
     // 付款
-    addPayment: (payment: Omit<PaymentRecord, 'id'>) => void;
+    addPayment: (payment: Omit<PaymentRecord, 'id' | 'createdAt'>) => void;
     deletePayment: (id: string) => void;
 
     // 计算
-    getPhaseProgress: (phase: string) => number;
+    getPhaseProgress: (phase: string) => { completed: number; total: number; percent: number };
     getTotalProgress: () => number;
     getTotalSpent: () => number;
 }
@@ -122,7 +119,7 @@ export const useConstructionStore = create<ConstructionState>()(
         (set, get) => ({
             projectId: null,
             phases: DEFAULT_PHASES.map(p => ({ ...p })),
-            currentPhase: 'demolition',
+            currentPhase: 'demolition' as ConstructionPhase,
             checklists: [],
             purchases: [],
             logs: [],
@@ -144,15 +141,34 @@ export const useConstructionStore = create<ConstructionState>()(
 
             setCurrentPhase: (phase) => set({ currentPhase: phase }),
 
-            updatePhaseStatus: (phase, status) =>
+            updatePhase: (phase, updates) =>
                 set((s) => ({
-                    phases: s.phases.map(p => p.key === phase ? { ...p, status } : p),
+                    phases: s.phases.map(p => p.key === phase ? { ...p, ...updates } : p),
                 })),
 
-            toggleChecklist: (id) =>
-                set((s) => ({
-                    checklists: s.checklists.map(c => c.id === id ? { ...c, checked: !c.checked } : c),
-                })),
+            completePhase: (phase) => {
+                const s = get();
+                const idx = s.phases.findIndex(p => p.key === phase);
+                const nextPhase = (s.phases[idx + 1]?.key || phase) as ConstructionPhase;
+                set({
+                    phases: s.phases.map(p => p.key === phase ? { ...p, status: 'completed' as const } : p),
+                    currentPhase: nextPhase
+                });
+            },
+
+            toggleChecklist: (id, phase) =>
+                set((s) => {
+                    const exists = s.checklists.find(c => c.id === id);
+                    if (!exists) {
+                        const item = CHECKLIST_DATA.find((c: any) => c.id === id);
+                        if (item) {
+                            return { checklists: [...s.checklists, { ...item, checked: true, group: (item as any).group || 'default' }] };
+                        }
+                    }
+                    return {
+                        checklists: s.checklists.map(c => c.id === id ? { ...c, checked: !c.checked } : c),
+                    };
+                }),
 
             updateChecklistNote: (id, note) =>
                 set((s) => ({
@@ -186,9 +202,15 @@ export const useConstructionStore = create<ConstructionState>()(
                 set((s) => ({ payments: s.payments.filter(p => p.id !== id) })),
 
             getPhaseProgress: (phase) => {
-                const items = get().checklists.filter(c => c.phase === phase);
-                if (items.length === 0) return 0;
-                return Math.round((items.filter(c => c.checked).length / items.length) * 100);
+                // const { CHECKLIST_DATA } = require('@/engine/constructionData'); // Removed this line
+                const totalItems = CHECKLIST_DATA.filter((c: any) => c.phase === phase);
+                const checkedItems = get().checklists.filter(c => c.phase === phase && c.checked);
+
+                const total = totalItems.length;
+                const completed = checkedItems.length;
+                const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+                return { completed, total, percent };
             },
 
             getTotalProgress: () => {

@@ -7,8 +7,11 @@ import {
     InformationCircleOutline,
     CheckShieldOutline,
     SetOutline,
+    BellOutline,
 } from 'antd-mobile-icons';
-import { useAuthStore } from '@/store/authStore';
+import { useAuthStore, useNotificationStore } from '@/store';
+import { Badge, Button } from 'antd-mobile';
+import { NotificationCenter } from '@/components/NotificationCenter';
 
 const allTabs = [
     { key: '/', title: '首页', icon: <AppOutline /> },
@@ -22,6 +25,9 @@ export default function AppLayout({ children }: { children?: React.ReactNode }) 
     const location = useLocation();
     const navigate = useNavigate();
     const { role } = useAuthStore();
+    const { notifications } = useNotificationStore();
+    const [showNotify, setShowNotify] = React.useState(false);
+    const unreadCount = notifications.filter(n => !n.read).length;
 
     // 根据角色过滤 Tab
     const tabs = allTabs.filter(tab => !tab.isAdmin || role === 'admin');
@@ -38,10 +44,42 @@ export default function AppLayout({ children }: { children?: React.ReactNode }) 
     ].some(path => location.pathname.startsWith(path));
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', position: 'relative' }}>
             <div style={{ flex: 1, overflow: 'auto', paddingBottom: hideTabBar ? 0 : 50 }}>
                 {children || <Outlet />}
             </div>
+
+            {/* 通知铃铛 */}
+            {!hideTabBar && (
+                <div style={{
+                    position: 'fixed',
+                    right: 16,
+                    bottom: 70,
+                    zIndex: 99,
+                }}>
+                    <Badge content={unreadCount > 0 ? unreadCount : null}>
+                        <div
+                            onClick={() => setShowNotify(true)}
+                            style={{
+                                width: 44,
+                                height: 44,
+                                borderRadius: '50%',
+                                background: '#fff',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                color: 'var(--color-primary)',
+                                fontSize: 24
+                            }}
+                        >
+                            <BellOutline />
+                        </div>
+                    </Badge>
+                </div>
+            )}
+
+            <NotificationCenter visible={showNotify} onClose={() => setShowNotify(false)} />
             {!hideTabBar && (
                 <div style={{
                     position: 'fixed',

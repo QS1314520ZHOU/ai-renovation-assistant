@@ -40,10 +40,37 @@ QUOTE_PARSE_PROMPT = """你是一个装修报价单分析专家。请将以下�
 class QuoteService:
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.client = AsyncOpenAI(
-            base_url=settings.AI_BASE_URL,
-            api_key=settings.AI_API_KEY,
-        )
+        self._client = None
+        self._config = None
+
+    async def _get_config(self):
+        if self._config:
+            return self._config
+        # 共享 AIService 的配置获取逻辑
+        from app.models.config import SystemConfig
+        from app.config import settings
+        result = await self.db.execute(select(SystemConfig).where(SystemConfig.key == "ai_config", SystemConfig.is_active == True))
+        cfg_record = result.scalar_one_or_none()
+        if cfg_record:
+            val = cfg_record.value
+            active_id = val.get("activeModelId")
+            models = val.get("aiModels", [])
+            active_model = next((m for m in models if m["id"] == active_id), None) if active_id else (models[0] if models else None)
+            if active_model:
+                self._config = {
+                    "base_url": active_model.get("baseUrl"),
+                    "api_key": active_model.get("apiKey"),
+                    "model": active_model.get("models")[0] if active_model.get("models") else settings.AI_MODEL
+                }
+                return self._config
+        self._config = {"base_url": settings.AI_BASE_URL, "api_key": settings.AI_API_KEY, "model": settings.AI_MODEL}
+        return self._config
+
+    async def _get_client(self):
+        if self._client: return self._client
+        cfg = await self._get_config()
+        self._client = AsyncOpenAI(base_url=cfg["base_url"], api_key=cfg["apiKey"] if "apiKey" in cfg else cfg["api_key"])
+        return self._client
 
     async def upload_and_parse(self, project_id: uuid.UUID, file):
         # 1. Read file and encode to base64
@@ -51,8 +78,10 @@ class QuoteService:
         base64_image = base64.b64encode(contents).decode('utf-8')
         
         # 2. AI Vision Parsing
-        parse_result = await self.client.chat.completions.create(
-            model=settings.AI_MODEL,
+        client = await self._get_client()
+        cfg = await self._get_config()
+        parse_result = await client.chat.completions.create(
+            model=cfg["model"],
             messages=[
                 {
                     "role": "user",
@@ -81,8 +110,10 @@ class QuoteService:
 
     async def check_from_text(self, project_id: uuid.UUID, text: str):
         # 1. AI Parsing from text
-        parse_result = await self.client.chat.completions.create(
-            model=settings.AI_MODEL,
+        client = await self._get_client()
+        cfg = await self._get_config()
+        parse_result = await client.chat.completions.create(
+            model=cfg["model"],
             messages=[
                 {"role": "system", "content": QUOTE_PARSE_PROMPT},
                 {"role": "user", "content": text},
@@ -198,7 +229,13 @@ class QuoteService:
         return {}
 
     def _match_standard_item(self, name: str, std_items: List[PricingStandardItem]) -> PricingStandardItem:
+        name_clean = name.lower().strip()
+        # 1. 精确匹配或别名匹配
         for item in std_items:
             if item.name == name or name in (item.aliases_json or []):
+                return item
+        # 2. 关键词包含匹配 (模糊匹配增强)
+        for item in std_items:
+            if item.name in name_clean or any(alias in name_clean for alias in (item.aliases_json or [])):
                 return item
         return None
