@@ -44,9 +44,14 @@ export default function ContractCheck() {
 
         try {
             const res = await contractApi.checkText(currentHouse?.id || 'default', input);
+            const data = res.data || res;
             setReport({
-                ...res.data,
-                details: res.data.risks_json || res.data.risks.details || res.data.risks || [] // Adjust based on API structure
+                score: data.score,
+                risks: data.risks,
+                payment_terms: data.payment_terms,
+                recommendations: data.recommendations || [],
+                summary: data.summary,
+                details: data.risks_json || []
             });
         } catch (error: any) {
             Toast.show({ content: `解析失败: ${error.message}`, icon: 'fail' });
@@ -55,7 +60,6 @@ export default function ContractCheck() {
             setParsePhase('');
         }
     };
-
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -69,9 +73,14 @@ export default function ContractCheck() {
             if (res.error) {
                 Toast.show({ content: res.error, icon: 'fail' });
             } else {
+                const data = res.data || res;
                 setReport({
-                    ...res.data,
-                    details: res.data.risks_json || res.data.risks.details || res.data.risks || []
+                    score: data.score,
+                    risks: data.risks,
+                    payment_terms: data.payment_terms,
+                    recommendations: data.recommendations || [],
+                    summary: data.summary,
+                    details: data.risks_json || []
                 });
                 Toast.show({ content: '识别成功', icon: 'success' });
             }
@@ -82,6 +91,7 @@ export default function ContractCheck() {
             setParsePhase('');
         }
     };
+
 
     return (
         <div style={{ background: 'var(--color-bg)', minHeight: '100vh', paddingBottom: 40 }}>
@@ -219,7 +229,7 @@ export default function ContractCheck() {
                         <Button block shape="rounded" fill="outline" onClick={() => setReport(null)}>
                             重新上传
                         </Button>
-                        <Button block shape="rounded" color="primary" onClick={() => navigate('/consult')}>
+                        <Button block shape="rounded" color="primary" onClick={() => navigate('/ai-consult')}>
                             咨询 AI 助理
                         </Button>
                     </div>

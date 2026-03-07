@@ -156,11 +156,14 @@ class ContractService:
         self.db.add(report)
         await self.db.commit()
 
-        return {
+       return {
             "contract_id": str(upload.id),
             "report_id": str(report.id),
             "score": report.overall_score,
             "risks": {"high": high, "medium": medium, "low": low},
+            "risks_json": risks,
+            "payment_terms": json_data.get("payment_terms", {}),
+            "recommendations": json_data.get("recommendations", []),
             "summary": report.ai_summary
         }
 

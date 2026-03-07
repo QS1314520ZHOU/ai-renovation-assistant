@@ -3,6 +3,16 @@ import jsPDF from 'jspdf';
 import { BudgetResult, HouseProfile, BudgetScheme } from '@/types';
 import { formatMoney, tierLevelLabel, categoryLabel } from './format';
 
+// 辅助函数：从 schemes 数组或旧字段中查找对应档次
+function findScheme(result: BudgetResult, tier: string): BudgetScheme | undefined {
+    return result.schemes?.find(s => s.tier === tier) || (result as any)[tier];
+}
+
+// 辅助函数：兼容新旧漏项字段
+function getMissingItems(result: BudgetResult): any[] {
+    return result.missingItems || (result.missing_items as any[]) || [];
+}
+
 // 导出为长图
 export async function exportAsImage(elementId: string, filename: string): Promise<void> {
     const element = document.getElementById(elementId);
@@ -74,9 +84,9 @@ export async function exportAsPDF(
     // 三档对比
     addText('二、三档预算对比', 14, true);
     const tiers = [
-        { tier: 'economy', label: '经济档', scheme: result.economy },
-        { tier: 'standard', label: '普通档', scheme: result.standard },
-        { tier: 'premium', label: '改善档', scheme: result.premium },
+        { tier: 'economy', label: '经济档', scheme: findScheme(result, 'economy') },
+        { tier: 'standard', label: '普通档', scheme: findScheme(result, 'standard') },
+        { tier: 'premium', label: '改善档', scheme: findScheme(result, 'premium') },
     ];
     tiers.forEach(t => {
         if (t.scheme) {
@@ -86,7 +96,7 @@ export async function exportAsPDF(
     y += 5;
 
     // 当前档次明细
-    const currentScheme = result[house.tierLevel];
+    const currentScheme = findScheme(result, house.tierLevel);
     addLine();
     addText(`三、${tierLevelLabel(house.tierLevel)}预算明细`, 14, true);
     if (currentScheme) {
@@ -123,11 +133,12 @@ export async function exportAsPDF(
     }
 
     // 漏项提醒
-    if (result.missingItems.length > 0) {
+    const missingItems = getMissingItems(result);
+    if (missingItems.length > 0) {
         checkPageBreak(30);
         addLine();
         addText(type === 'detail' ? '五、漏项提醒' : '四、漏项提醒', 14, true);
-        result.missingItems.forEach(item => {
+        missingItems.forEach(item => {
             checkPageBreak(15);
             const riskLabel = item.riskLevel === 'high' ? '🔴' : item.riskLevel === 'medium' ? '🟡' : '🟢';
             addText(`${riskLabel} ${item.itemName}（${formatMoney(item.estimatedPriceMin)}-${formatMoney(item.estimatedPriceMax)}）`, 11);
@@ -148,13 +159,14 @@ export async function exportAsPDF(
 
 // 生成分享文本
 export function generateShareText(house: HouseProfile, result: BudgetResult): string {
-    const scheme = result[house.tierLevel];
+    const scheme = findScheme(result, house.tierLevel);
     if (!scheme) return '无法生成分享内容';
+    const missingItems = getMissingItems(result);
     return `📊 我的装修预算报告
 🏠 ${house.city} · ${house.layout} · ${house.innerArea}㎡
 💰 ${tierLevelLabel(house.tierLevel)}预算：${formatMoney(scheme.total_amount)}
 📋 约${Math.round(scheme.total_amount / house.innerArea)}元/㎡
-⚠️ 发现${result.missingItems.length}项容易遗漏的费用
+⚠️ 发现${missingItems.length}项容易遗漏的费用
 
 —— 由AI装修预算助手生成`;
 }

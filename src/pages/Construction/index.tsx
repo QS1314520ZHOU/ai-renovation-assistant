@@ -50,7 +50,7 @@ export default function Construction() {
     const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list');
     const currentPhaseInfo = PHASE_LIST.find(p => p.phase === currentPhase);
     const completedPhases = phases.filter(p => p.status === 'completed').length;
-    const totalPhases = phases.filter(p => (p as any).key !== 'warranty').length;
+    const totalPhases = phases.filter(p => p.phase !== 'warranty').length;
     const overallPercent = Math.round(completedPhases / totalPhases * 100);
     const totalSpent = getTotalSpent();
     const daysElapsed = Math.max(0, dayjs().diff(dayjs(startDate), 'day'));

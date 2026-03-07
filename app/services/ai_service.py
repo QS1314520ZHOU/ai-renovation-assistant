@@ -37,6 +37,10 @@ class AIService:
     async def _get_client(self):
         return await AIClientFactory.get_client(self.db)
 
+    async def _get_config(self):
+        return await AIClientFactory.get_config(self.db)
+
+
     async def chat(self, req: AIChatRequest, user_id: str) -> AIChatResponse:
         # 获取或创建会话
         if req.session_id:
