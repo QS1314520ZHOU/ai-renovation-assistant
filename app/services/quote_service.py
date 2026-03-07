@@ -69,7 +69,7 @@ class QuoteService:
     async def _get_client(self):
         if self._client: return self._client
         cfg = await self._get_config()
-        self._client = AsyncOpenAI(base_url=cfg["base_url"], api_key=cfg["apiKey"] if "apiKey" in cfg else cfg["api_key"])
+        self._client = AsyncOpenAI(base_url=cfg["base_url"], api_key=cfg["api_key"])
         return self._client
 
     async def upload_and_parse(self, project_id: uuid.UUID, file):

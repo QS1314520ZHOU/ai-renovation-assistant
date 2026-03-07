@@ -1,10 +1,10 @@
 import React from 'react';
-import { PhaseInfo } from '@/types';
+import { PhaseState } from '@/store/constructionStore';
 import dayjs from 'dayjs';
 
 interface GanttViewProps {
     startDate: string;
-    phases: PhaseInfo[];
+    phases: PhaseState[];
     currentPhase: string;
 }
 
@@ -12,37 +12,45 @@ export const GanttView: React.FC<GanttViewProps> = ({ startDate, phases, current
     const start = dayjs(startDate);
     const today = dayjs();
 
-    // 计算总天数和每一天的宽度
     const DAY_WIDTH = 40;
-    let totalDays = 0;
-    const items = phases.filter(p => p.phase !== 'warranty').map(p => {
+    let accumulatedDays = 0;
+
+    const items = phases.filter(p => p.phase !== 'warranty').map((p, idx) => {
         const duration = p.typicalDurationDays || 7;
-        const phaseStart = start.add(totalDays, 'day');
-        const phaseEnd = phaseStart.add(duration, 'day');
-        const left = totalDays * DAY_WIDTH;
-        const width = duration * DAY_WIDTH;
-        totalDays += duration;
+
+        // 如果 store 中没有记录日期，则根据典型的持续时间累加计算
+        const phaseStart = p.startDate ? dayjs(p.startDate) : start.add(accumulatedDays, 'day');
+        const phaseEnd = p.endDate ? dayjs(p.endDate) : phaseStart.add(duration, 'day');
+
+        const left = phaseStart.diff(start, 'day') * DAY_WIDTH;
+        const width = phaseEnd.diff(phaseStart, 'day') * DAY_WIDTH;
+
+        // 为下一个没有日期的阶段累加
+        accumulatedDays += duration;
 
         return {
             ...p,
             left,
-            width,
+            width: Math.max(width, DAY_WIDTH * 2), // 保证最小宽度以便显示文字
             phaseStart,
             phaseEnd,
             isActive: currentPhase === p.phase,
-            isCompleted: phaseEnd.isBefore(today)
+            isCompleted: p.status === 'completed' || phaseEnd.isBefore(today, 'day')
         };
     });
 
+    // 计算总宽度 (根据最后一个阶段的结束日期)
+    const lastEnd = items.length > 0 ? items[items.length - 1].phaseEnd : start.add(30, 'day');
+    const totalDays = lastEnd.diff(start, 'day') + 5;
     const totalWidth = totalDays * DAY_WIDTH;
 
     return (
         <div style={{ padding: '0 16px', overflowX: 'auto', background: '#fff', borderRadius: 12, paddingBottom: 16 }}>
-            <div style={{ position: 'relative', width: totalWidth, height: 320, marginTop: 20 }}>
+            <div style={{ position: 'relative', width: totalWidth, height: 350, marginTop: 20 }}>
                 {/* 顶部时间轴刻度 */}
-                <div style={{ display: 'flex', borderBottom: '1px solid #F3F4F6', marginBottom: 20 }}>
+                <div style={{ display: 'flex', borderBottom: '1px solid #F3F4F6', marginBottom: 20, height: 30 }}>
                     {Array.from({ length: Math.ceil(totalDays / 7) }).map((_, i) => (
-                        <div key={i} style={{ width: DAY_WIDTH * 7, fontSize: 10, color: '#9CA3AF', paddingLeft: 4 }}>
+                        <div key={i} style={{ width: DAY_WIDTH * 7, fontSize: 10, color: '#9CA3AF', paddingLeft: 4, borderLeft: '1px solid #F3F4F6' }}>
                             第 {i + 1} 周
                         </div>
                     ))}
@@ -70,16 +78,19 @@ export const GanttView: React.FC<GanttViewProps> = ({ startDate, phases, current
                         }}>
                             {item.icon} {item.name}
                         </div>
-                        {/* 连线 */}
-                        {idx > 0 && (
+
+                        {/* 辅助线 */}
+                        {item.isActive && (
                             <div style={{
                                 position: 'absolute',
-                                left: item.left - 2,
-                                top: -24,
-                                width: 1,
-                                height: 24,
-                                borderLeft: '1px dashed #E5E7EB',
-                                zIndex: 1
+                                left: item.left,
+                                top: 24,
+                                width: item.width,
+                                height: 300,
+                                background: 'rgba(16, 185, 129, 0.03)',
+                                borderLeft: '1px dashed rgba(16, 185, 129, 0.2)',
+                                borderRight: '1px dashed rgba(16, 185, 129, 0.2)',
+                                pointerEvents: 'none'
                             }} />
                         )}
                     </div>
@@ -98,7 +109,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ startDate, phases, current
                     }}>
                         <div style={{
                             position: 'absolute',
-                            top: -20,
+                            top: -24,
                             left: -20,
                             background: '#EF4444',
                             color: '#fff',

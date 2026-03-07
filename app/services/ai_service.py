@@ -2,6 +2,7 @@ import uuid
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+import base64
 from app.config import settings
 from app.models.ai_session import AISession, AIMessage
 from app.models.config import SystemConfig
@@ -165,3 +166,43 @@ class AIService:
             .order_by(AIMessage.created_at)
         )
         return [{"role": m.role, "content": m.content, "created_at": str(m.created_at)} for m in result.scalars().all()]
+
+    async def inspect_photo(self, phase: str, items: str, file) -> str:
+        """使用 Vision 模型分析施工照片"""
+        contents = await file.read()
+        base64_image = base64.b64encode(contents).decode('utf-8')
+        
+        prompt = f"""你是一位资深的装修监理。请根据用户提供的【{phase}】阶段施工照片进行质量分析。
+当前阶段的关键检查项包括：{items}
+
+请在回复中包含以下内容：
+1. 【验收结论】：整体施工质量评价（合格/存在风险/不合格）
+2. 【发现的问题】：详细列出照片中识别出的施工瑕疵或违规点
+3. 【整改建议】：针对发现的问题给出具体的加固或重新施工方案
+4. 【避坑提醒】：提醒业主该阶段后续施工中最容易被偷工减料的地方
+
+请用专业、客观、严谨的口吻回答。"""
+
+        client = await self._get_client()
+        cfg = await self._get_config()
+        
+        response = await client.chat.completions.create(
+            model=cfg["model"],
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{file.content_type};base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            temperature=0.3,
+            max_tokens=2000,
+        )
+        return response.choices[0].message.content

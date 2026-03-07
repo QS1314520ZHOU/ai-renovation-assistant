@@ -104,6 +104,24 @@ export const aiApi = {
         message: string;
         session_type?: string;
     }) => http.post<AIChatResult>('/ai/chat', data),
+
+    upload: (file: File) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return http.post<{ url: string }>('/ai/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    },
+
+    inspect: (data: { phase: string, items: string, file: File }) => {
+        const formData = new FormData();
+        formData.append('phase', data.phase);
+        formData.append('items', data.items);
+        formData.append('file', data.file);
+        return http.post<{ reply: string }>('/ai/inspect', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    }
 };
 
 // ---- 词典 ----

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.schemas.ai import AIChatRequest, AIChatResponse
 from app.schemas.common import ApiResponse
 from app.services.ai_service import AIService
+from app.services.upload_service import save_upload_file
 
 router = APIRouter()
 
@@ -27,3 +28,23 @@ async def get_session_messages(
     service = AIService(db)
     messages = await service.get_messages(session_id)
     return ApiResponse(data=messages)
+
+@router.post("/upload", response_model=ApiResponse)
+async def upload_file(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user),
+):
+    url = save_upload_file(file)
+    return ApiResponse(data={"url": url})
+
+@router.post("/inspect", response_model=ApiResponse)
+async def inspect_site(
+    phase: str = Form(...),
+    items: str = Form(...),
+    file: UploadFile = File(...),
+    user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    service = AIService(db)
+    result = await service.inspect_photo(phase, items, file)
+    return ApiResponse(data={"reply": result})
