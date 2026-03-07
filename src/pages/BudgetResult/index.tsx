@@ -1,16 +1,52 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NavBar, Tabs, Tag, Toast, Button, Collapse } from 'antd-mobile';
+import { NavBar, Tabs, Tag, Toast, Button, Collapse, Popover, DotLoading } from 'antd-mobile';
+import { QuestionCircleOutline } from 'antd-mobile-icons';
 import ReactECharts from 'echarts-for-react';
 import { useProjectStore } from '@/store';
 import { formatMoney, tierLevelLabel, tierLevelColor, categoryLabel } from '@/utils/format';
-import { TierLevel, BudgetScheme } from '@/types';
+import { TierLevel, BudgetScheme, BudgetItem } from '@/types';
+import { glossaryApi } from '@/api/services';
 import FeedbackWidget from '@/components/Feedback/FeedbackWidget';
+
+// 术语辅助组件
+const TermItem = ({ item, glossary }: { item: BudgetItem, glossary: any[] }) => {
+    const term = glossary.find(g => g.term === item.item_name || (g.aliases && g.aliases.includes(item.item_name)));
+
+    if (!term) return <span>{item.item_name}</span>;
+
+    return (
+        <Popover
+            content={
+                <div style={{ padding: 12, maxWidth: 240, fontSize: 13 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--color-primary)' }}>{term.term}</div>
+                    <div style={{ marginBottom: 8, color: '#4B5563' }}>{term.definition}</div>
+                    {term.risk && (
+                        <div style={{ color: '#DC2626', fontSize: 12, borderTop: '1px solid #F3F4F6', paddingTop: 8 }}>
+                            ⚠️ 风险：{term.risk}
+                        </div>
+                    )}
+                </div>
+            }
+            trigger='click'
+            placement='top-start'
+        >
+            <span style={{ color: 'var(--color-primary)', textDecoration: 'underline', textDecorationStyle: 'dotted', cursor: 'pointer' }}>
+                {item.item_name} <QuestionCircleOutline style={{ fontSize: 12, verticalAlign: 'middle' }} />
+            </span>
+        </Popover>
+    );
+};
 
 export default function BudgetResult() {
     const navigate = useNavigate();
     const { budgetResult, currentHouse } = useProjectStore();
     const [activeTier, setActiveTier] = useState<TierLevel>(currentHouse?.tierLevel || 'standard');
+    const [glossary, setGlossary] = useState<any[]>([]);
+
+    useEffect(() => {
+        glossaryApi.list().then(setGlossary).catch(console.error);
+    }, []);
 
     if (!budgetResult || !currentHouse) {
         return (
@@ -21,7 +57,11 @@ export default function BudgetResult() {
         );
     }
 
-    const currentScheme: BudgetScheme = budgetResult[activeTier];
+    const currentScheme = (budgetResult[activeTier] || budgetResult.schemes?.find(s => s.tier === activeTier) || budgetResult.schemes?.[0]) as BudgetScheme;
+
+    if (!currentScheme) {
+        return <div style={{ padding: 40, textAlign: 'center' }}><DotLoading /> 数据加载中...</div>;
+    }
 
     // 饼图数据
     const pieOption = useMemo(() => ({
@@ -35,12 +75,10 @@ export default function BudgetResult() {
             itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
             label: { show: false },
             data: [
-                { value: currentScheme.hardDecorationBudget, name: '硬装基础' },
-                { value: currentScheme.mainMaterialBudget, name: '主材' },
-                { value: currentScheme.kitchenBathroomBudget, name: '厨卫' },
-                { value: currentScheme.customBudget, name: '定制' },
-                { value: currentScheme.otherBudget, name: '其他' },
-                { value: currentScheme.contingencyBudget, name: '预备金' },
+                { value: currentScheme.material_amount, name: '材料' },
+                { value: currentScheme.labor_amount, name: '人工' },
+                { value: currentScheme.management_fee, name: '管理费' },
+                { value: currentScheme.contingency, name: '预备金' },
             ].filter(d => d.value > 0),
         }],
     }), [currentScheme]);
@@ -56,7 +94,7 @@ export default function BudgetResult() {
     }, [currentScheme]);
 
     return (
-        <div style={{ background: 'var(--color-bg)', minHeight: '100vh' }}>
+        <div style={{ background: 'var(--color-bg)', minHeight: '100vh', paddingBottom: 40 }}>
             <NavBar onBack={() => navigate(-1)} style={{ background: '#fff' }}>
                 预算报告
             </NavBar>
@@ -73,13 +111,12 @@ export default function BudgetResult() {
                     {currentHouse.city} · {currentHouse.layout} · {tierLevelLabel(activeTier)}
                 </div>
                 <div style={{ fontSize: 36, fontWeight: 700, marginBottom: 4 }}>
-                    {formatMoney(currentScheme.totalBudget)}
+                    {formatMoney(currentScheme.total_amount)}
                 </div>
                 <div style={{ fontSize: 12, opacity: 0.7 }}>
-                    套内 {currentHouse.innerArea}㎡ · 约{Math.round(currentScheme.totalBudget / currentHouse.innerArea!)}元/㎡
+                    套内 {currentHouse.innerArea}㎡ · 约{Math.round(currentScheme.total_amount / (currentHouse.innerArea || 1))}元/㎡
                 </div>
 
-                {/* 超预算提示 */}
                 {budgetResult.overBudget && activeTier === currentHouse.tierLevel && (
                     <div style={{
                         marginTop: 12,
@@ -88,7 +125,7 @@ export default function BudgetResult() {
                         padding: '8px 12px',
                         fontSize: 13,
                     }}>
-                        ⚠️ 超出目标预算 {formatMoney(budgetResult.overBudgetAmount)}，建议查看下方优化建议
+                        ⚠️ 超出目标预算 {formatMoney(budgetResult.overBudgetAmount)}
                     </div>
                 )}
 
@@ -117,7 +154,7 @@ export default function BudgetResult() {
                     >
                         <div style={{ fontSize: 12, opacity: 0.8 }}>{tierLevelLabel(tier)}</div>
                         <div style={{ fontSize: 16, fontWeight: 700, marginTop: 4 }}>
-                            {formatMoney(budgetResult[tier].totalBudget)}
+                            {formatMoney(budgetResult[tier]?.total_amount || 0)}
                         </div>
                     </div>
                 ))}
@@ -129,12 +166,10 @@ export default function BudgetResult() {
                 <ReactECharts option={pieOption} style={{ height: 220 }} />
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
                     {[
-                        { label: '硬装基础', value: currentScheme.hardDecorationBudget, color: '#4F46E5' },
-                        { label: '主材', value: currentScheme.mainMaterialBudget, color: '#10B981' },
-                        { label: '厨卫', value: currentScheme.kitchenBathroomBudget, color: '#F59E0B' },
-                        { label: '定制', value: currentScheme.customBudget, color: '#EF4444' },
-                        { label: '其他', value: currentScheme.otherBudget, color: '#8B5CF6' },
-                        { label: '预备金', value: currentScheme.contingencyBudget, color: '#EC4899' },
+                        { label: '材料', value: currentScheme.material_amount, color: '#4F46E5' },
+                        { label: '人工', value: currentScheme.labor_amount, color: '#10B981' },
+                        { label: '管理费', value: currentScheme.management_fee, color: '#F59E0B' },
+                        { label: '预备金', value: currentScheme.contingency, color: '#EC4899' },
                     ].filter(d => d.value > 0).map(d => (
                         <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
                             <span style={{ width: 8, height: 8, borderRadius: 2, background: d.color, display: 'inline-block' }} />
@@ -173,9 +208,11 @@ export default function BudgetResult() {
                                             borderBottom: '1px solid #F3F4F6',
                                         }}>
                                             <div>
-                                                <div style={{ color: 'var(--color-text)' }}>{item.itemName}</div>
+                                                <div style={{ color: 'var(--color-text)' }}>
+                                                    <TermItem item={item} glossary={glossary} />
+                                                </div>
                                                 <div style={{ color: 'var(--color-text-light)', fontSize: 11 }}>
-                                                    {item.quantity}{item.unit} × {item.materialUnitPrice + item.laborUnitPrice + item.accessoryUnitPrice}元/{item.unit}
+                                                    {item.quantity}{item.unit} × {item.material_unit_price + item.labor_unit_price + item.accessory_unit_price}元/{item.unit}
                                                 </div>
                                             </div>
                                             <div style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -190,92 +227,25 @@ export default function BudgetResult() {
             </div>
 
             {/* 漏项提醒 */}
-            {budgetResult.missingItems.length > 0 && (
+            {budgetResult.missing_items && budgetResult.missing_items.length > 0 && (
                 <div style={{ margin: '0 12px 16px', background: '#fff', borderRadius: 12, padding: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <h3 style={{ fontSize: 15, fontWeight: 600 }}>⚠️ 漏项提醒</h3>
-                        <Tag color="warning">{budgetResult.missingItems.length}项</Tag>
-                    </div>
-                    {budgetResult.missingItems.map(item => (
-                        <div key={item.id} style={{
-                            padding: '10px 12px',
-                            background: item.riskLevel === 'high' ? '#FEF2F2' : item.riskLevel === 'medium' ? '#FFFBEB' : '#F0FDF4',
-                            borderRadius: 8,
-                            marginBottom: 8,
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <span style={{ fontWeight: 600, fontSize: 14 }}>{item.itemName}</span>
-                                <span className={`risk-${item.riskLevel}`}>{
-                                    item.riskLevel === 'high' ? '高风险' : item.riskLevel === 'medium' ? '中风险' : '低风险'
-                                }</span>
-                            </div>
-                            <div style={{ fontSize: 12, color: '#6B7280', marginTop: 4, lineHeight: 1.5 }}>
-                                {item.explanation}
-                            </div>
-                            <div style={{ fontSize: 12, color: '#9CA3AF', marginTop: 4 }}>
-                                预估费用：{formatMoney(item.estimatedPriceMin)} - {formatMoney(item.estimatedPriceMax)}
-                            </div>
+                    <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>⚠️ 重点关注</h3>
+                    {budgetResult.suggestions?.map((s, idx) => (
+                        <div key={idx} style={{ fontSize: 13, color: '#6B7280', marginBottom: 8, display: 'flex', gap: 8 }}>
+                            <span style={{ color: 'var(--color-primary)' }}>•</span>
+                            <span>{s}</span>
                         </div>
                     ))}
                 </div>
             )}
 
-            {/* 优化建议 */}
-            {budgetResult.optimizations.length > 0 && (
-                <div style={{ margin: '0 12px 16px', background: '#fff', borderRadius: 12, padding: 16 }}>
-                    <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>💡 优化建议</h3>
-                    {budgetResult.optimizations.map(opt => (
-                        <div key={opt.id} style={{
-                            padding: '10px 12px',
-                            background: opt.type === 'must_keep' ? '#FEF2F2' : opt.type === 'save' ? '#F0FDF4' : '#EEF2FF',
-                            borderRadius: 8,
-                            marginBottom: 8,
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <Tag color={opt.type === 'must_keep' ? 'danger' : opt.type === 'save' ? 'success' : 'primary'} fill="outline" style={{ fontSize: 11 }}>
-                                    {opt.type === 'must_keep' ? '🔒 不建议省' : opt.type === 'save' ? '✂️ 可优化' : '🔄 可替代'}
-                                </Tag>
-                                <span style={{ fontWeight: 600, fontSize: 14 }}>{opt.title}</span>
-                            </div>
-                            <div style={{ fontSize: 12, color: '#6B7280', lineHeight: 1.5 }}>
-                                {opt.description}
-                            </div>
-                            {opt.savingAmount && (
-                                <div style={{ fontSize: 12, color: '#059669', marginTop: 4 }}>
-                                    预估可省：{formatMoney(opt.savingAmount)}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            )}
-
-            {/* 反馈 */}
             <FeedbackWidget type="budget" />
 
-            {/* 底部操作 */}
-            <div style={{
-                padding: '12px 16px 32px',
-                display: 'flex',
-                gap: 10,
-            }}>
-                <Button
-                    block
-                    fill="outline"
-                    color="primary"
-                    shape="rounded"
-                    onClick={() => navigate('/missing-check')}
-                >
-                    查看完整漏项
+            <div style={{ padding: '12px 16px 32px', display: 'flex', gap: 10 }}>
+                <Button block fill="outline" color="primary" shape="rounded" onClick={() => navigate('/consult')}>
+                    重新咨询
                 </Button>
-                <Button
-                    block
-                    color="primary"
-                    shape="rounded"
-                    onClick={() => {
-                        Toast.show({ content: '报告已保存，可在"我的项目"中查看', icon: 'success' });
-                    }}
-                >
+                <Button block color="primary" shape="rounded" onClick={() => { Toast.show({ content: '报告已保存', icon: 'success' }); }}>
                     保存报告
                 </Button>
             </div>

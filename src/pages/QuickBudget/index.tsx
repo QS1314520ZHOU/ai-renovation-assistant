@@ -4,7 +4,7 @@ import {
     Form, Input, Picker, Button, Stepper, Switch, Toast, NavBar,
 } from 'antd-mobile';
 import { useProjectStore } from '@/store';
-import { calculateBudget } from '@/engine/budgetEngine';
+import { budgetApi } from '@/api/services';
 import { getCityNames } from '@/engine/cityFactors';
 import { HouseProfile, TierLevel } from '@/types';
 import { v4 as uuid } from 'uuid';
@@ -68,7 +68,7 @@ export default function QuickBudget() {
         }
     };
 
-    const handleCalculate = () => {
+    const handleCalculate = async () => {
         const innerArea = parseFloat(form.innerArea);
         if (!innerArea || innerArea < 20 || innerArea > 500) {
             Toast.show({ content: '请输入有效的套内面积（20-500㎡）', icon: 'fail' });
@@ -78,38 +78,24 @@ export default function QuickBudget() {
         setLoading(true);
 
         try {
-            const house: HouseProfile = {
-                id: uuid(),
-                projectName: `${form.city}新房装修`,
-                city: form.city,
-                grossArea: Math.round(innerArea * 1.22),
-                innerArea,
-                layout: form.layout,
-                bedroomCount: parseInt(form.layout.match(/(\d+)室/)?.[1] || '3'),
-                livingRoomCount: parseInt(form.layout.match(/(\d+)厅/)?.[1] || '2'),
-                bathroomCount: form.bathroomCount,
-                kitchenCount: form.kitchenCount,
-                balconyCount: form.balconyCount,
-                floorHeight: 2.8,
-                houseType: 'new_blank',
-                purpose: 'self_use',
-                targetBudget: form.targetBudget ? parseFloat(form.targetBudget) * 10000 : 200000,
-                familyMembers: { hasElderly: false, hasChildren: false, hasPets: false },
-                tierLevel: form.tierLevel,
-                floorPreference: form.floorPreference,
-                hasCeiling: form.hasCeiling,
-                hasCustomCabinet: form.hasCustomCabinet,
-                includeFurniture: form.includeFurniture,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            };
+            const cityCodeMap: Record<string, string> = { '成都': '510100', '北京': '110100', '上海': '310100', '广州': '440100', '深圳': '440300' };
+            const cityCode = cityCodeMap[form.city] || '510100';
 
-            setCurrentHouse(house);
-            const result = calculateBudget(house);
-            setBudgetResult(result);
-            navigate('/budget-result');
+            const result = await budgetApi.calculate({
+                city_code: cityCode,
+                inner_area: innerArea,
+                layout_type: form.layout,
+                tier: form.tierLevel,
+                floor_preference: form.floorPreference,
+                bathroom_count: form.bathroomCount,
+            });
+
+            if (result) {
+                setBudgetResult(result);
+                navigate('/budget-result');
+            }
         } catch (error: any) {
-            Toast.show({ content: '计算出错: ' + error.message, icon: 'fail' });
+            Toast.show({ content: '计算出错: ' + (error.message || '请重试'), icon: 'fail' });
         } finally {
             setLoading(false);
         }

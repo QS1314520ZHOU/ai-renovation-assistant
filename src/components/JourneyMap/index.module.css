@@ -1,0 +1,110 @@
+.container {
+    padding: 24px 16px;
+    background: #fff;
+    margin: -20px 16px 20px;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    position: relative;
+    z-index: 10;
+}
+
+.header {
+    margin-bottom: 24px;
+}
+
+.title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 4px;
+}
+
+.subtitle {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.track {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.stageItem {
+    display: flex;
+    gap: 16px;
+    cursor: pointer;
+}
+
+.nodeWrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    width: 40px;
+}
+
+.iconNode {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 20px;
+    z-index: 2;
+}
+
+.connector {
+    position: absolute;
+    top: 40px;
+    bottom: -32px;
+    width: 2px;
+    background: #f0f0f0;
+    z-index: 1;
+}
+
+.content {
+    flex: 1;
+    padding-bottom: 8px;
+}
+
+.stageTitle {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.index {
+    font-size: 10px;
+    color: var(--color-text-secondary);
+    background: #f5f5f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stageDesc {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: 8px;
+}
+
+.tips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.tipTag {
+    font-size: 10px;
+    padding: 2px 5px;
+    --border-color: #E0E7FF;
+    --text-color: #4338CA;
+}

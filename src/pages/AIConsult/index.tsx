@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button, TextArea, Toast, DotLoading } from 'antd-mobile';
 import { useProjectStore } from '@/store';
 import { chatCompletion, CONSULT_SYSTEM_PROMPT, parseAIResponse } from '@/api/ai';
-import { calculateBudget } from '@/engine/budgetEngine';
-import { HouseProfile, TierLevel } from '@/types';
+import { budgetApi } from '@/api/services';
+import { HouseProfile, TierLevel, BudgetResult } from '@/types';
 import { v4 as uuid } from 'uuid';
 
 interface ChatMsg {
@@ -95,60 +95,54 @@ export default function AIConsult() {
         }
     }, [input, loading, messages, collectedFields]);
 
-    const handleGenerateBudget = (extraFields?: Record<string, any>) => {
+    const handleGenerateBudget = async (extraFields?: Record<string, any>) => {
         const fields = { ...collectedFields, ...extraFields };
         const house = mapFieldsToHouse(fields);
 
-        // 检查最小输入集
+        // 检查最小输入集 (使用更严格的校验)
         if (!house.city || !house.innerArea || !house.layout || !house.tierLevel) {
             Toast.show({ content: '信息不足，请至少告诉我城市、面积、户型和装修档次', icon: 'fail' });
             return;
         }
 
+        setLoading(true);
         try {
-            const fullHouse: HouseProfile = {
-                id: uuid(),
-                projectName: `${house.city}新房装修`,
-                city: house.city!,
-                grossArea: house.grossArea || house.innerArea! * 1.2,
-                innerArea: house.innerArea!,
-                layout: house.layout!,
-                bedroomCount: parseInt(house.layout!.match(/(\d+)室/)?.[1] || '3'),
-                livingRoomCount: parseInt(house.layout!.match(/(\d+)厅/)?.[1] || '2'),
-                bathroomCount: house.bathroomCount || parseInt(house.layout!.match(/(\d+)卫/)?.[1] || '1'),
-                kitchenCount: house.kitchenCount || 1,
-                balconyCount: house.balconyCount || 1,
-                floorHeight: 2.8,
-                houseType: house.houseType || 'new_blank',
-                purpose: house.purpose || 'self_use',
-                targetBudget: house.targetBudget || 200000,
-                targetStartDate: house.targetStartDate,
-                targetMoveInDate: house.targetMoveInDate,
-                familyMembers: {
-                    hasElderly: house.familyMembers?.hasElderly || false,
-                    hasChildren: house.familyMembers?.hasChildren || false,
-                    hasPets: house.familyMembers?.hasPets || false,
-                },
-                tierLevel: house.tierLevel as TierLevel || 'standard',
-                floorPreference: house.floorPreference || 'mixed',
-                hasCeiling: house.hasCeiling ?? true,
-                hasCustomCabinet: house.hasCustomCabinet ?? true,
-                includeFurniture: house.includeFurniture ?? false,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            };
+            // 映射城市代码 (简单 Mock: 成都 510100, 北京 110100, 默认成都)
+            const cityCodeMap: Record<string, string> = { '成都': '510100', '北京': '110100', '上海': '310100', '广州': '440100', '深圳': '440300' };
+            const cityCode = cityCodeMap[house.city] || '510100';
 
-            setCurrentHouse(fullHouse);
-            const result = calculateBudget(fullHouse);
-            setBudgetResult(result);
-            navigate('/budget-result');
+            const result = await budgetApi.calculate({
+                city_code: cityCode,
+                inner_area: house.innerArea,
+                layout_type: house.layout,
+                tier: (house.tierLevel as string) || 'standard',
+                floor_preference: house.floorPreference || 'tile',
+                bathroom_count: house.bathroomCount || 1,
+            });
+
+            if (result && result.schemes) {
+                const mappedResult: BudgetResult = {
+                    ...result,
+                    economy: result.schemes.find(s => s.tier === 'economy'),
+                    standard: result.schemes.find(s => s.tier === 'standard'),
+                    premium: result.schemes.find(s => s.tier === 'premium'),
+                    missingItems: [],
+                    optimizations: [],
+                    overBudget: false,
+                    overBudgetAmount: 0,
+                };
+                setBudgetResult(mappedResult);
+                navigate('/budget-result');
+            }
         } catch (error: any) {
-            Toast.show({ content: '预算计算出错: ' + (error.message || '请重试'), icon: 'fail' });
+            Toast.show({ content: '预算生成失败: ' + (error.message || '请重试'), icon: 'fail' });
+        } finally {
+            setLoading(false);
         }
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', height: '100dvh', background: '#F3F4F6' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#F3F4F6' }}>
             {/* Header */}
             <div style={{
                 background: '#fff',

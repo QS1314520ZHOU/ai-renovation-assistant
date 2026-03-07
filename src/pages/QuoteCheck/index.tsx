@@ -1,77 +1,39 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NavBar, Button, Toast, TextArea, DotLoading, Tag, ProgressBar } from 'antd-mobile';
-import { chatCompletion, parseAIResponse } from '@/api/ai';
-import { matchStandardItem, STANDARD_ITEMS } from '@/engine/standardItems';
+import { NavBar, Button, Toast, TextArea, DotLoading, Tag, ProgressBar, ImageUploader, ImageUploadItem } from 'antd-mobile';
+import { CameraOutline } from 'antd-mobile-icons';
+import { quoteApi } from '@/api/services';
+import { useProjectStore } from '@/store';
 import { formatMoney } from '@/utils/format';
 import FeedbackWidget from '@/components/Feedback/FeedbackWidget';
-import { v4 as uuid } from 'uuid';
 
 interface QuoteItem {
-    id: string;
-    rawName: string;
-    standardName: string | null;
-    standardItemId: string | null;
-    matchConfidence: number;
-    quantity: number | null;
-    unit: string;
-    unitPrice: number | null;
-    subtotal: number | null;
-    risks: QuoteRisk[];
-}
-
-interface QuoteRisk {
-    type: 'missing' | 'vague' | 'price_low' | 'price_high' | 'quantity_abnormal' | 'trick';
-    level: 'high' | 'medium' | 'low';
-    description: string;
-    suggestion: string;
+    name: string;
+    unit?: string;
+    quantity?: number;
+    unitPrice?: number;
+    subtotal?: number;
+    risks: any[];
 }
 
 interface QuoteReport {
     score: number;
-    totalItems: number;
-    totalAmount: number;
+    total_amount: number;
     items: QuoteItem[];
-    missingItems: string[];
     risks: { high: number; medium: number; low: number };
     suggestions: string[];
 }
 
-const QUOTE_PARSE_PROMPT = `你是一个装修报价单分析专家。请将以下报价单内容解析为结构化JSON格式。
-
-要求：
-1. 提取每一个报价项目，包括：项目名称、数量、单位、单价、小计
-2. 如果某些字段无法识别，设为null
-3. 尽可能还原表格结构
-
-输出格式：
-\`\`\`json
-{
-  "items": [
-    {
-      "name": "项目名称",
-      "quantity": 数量或null,
-      "unit": "单位",
-      "unitPrice": 单价或null,
-      "subtotal": 小计或null
-    }
-  ],
-  "totalAmount": 合计金额或null,
-  "notes": "补充说明"
-}
-\`\`\`
-
-以下是报价单内容：
-`;
-
 export default function QuoteCheck() {
     const navigate = useNavigate();
+    const { currentHouse } = useProjectStore();
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [report, setReport] = useState<QuoteReport | null>(null);
     const [parsePhase, setParsePhase] = useState<string>('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleAnalyze = async () => {
+    const handleTextAnalyze = async () => {
         if (!input.trim()) {
             Toast.show({ content: '请输入或粘贴报价单内容', icon: 'fail' });
             return;
@@ -79,131 +41,37 @@ export default function QuoteCheck() {
 
         setLoading(true);
         setReport(null);
+        setParsePhase('🔍 AI 正在深度解析报价内容...');
 
         try {
-            // 阶段1：AI解析报价单
-            setParsePhase('🔍 正在解析报价单内容...');
-            const parseResult = await chatCompletion({
-                messages: [
-                    { role: 'system', content: QUOTE_PARSE_PROMPT },
-                    { role: 'user', content: input },
-                ],
-                temperature: 0.3,
-                maxTokens: 3000,
-            });
-
-            const { json } = parseAIResponse(parseResult);
-            if (!json?.items || !Array.isArray(json.items)) {
-                Toast.show({ content: '解析失败，请检查输入内容', icon: 'fail' });
-                setLoading(false);
-                return;
-            }
-
-            // 阶段2：标准化映射
-            setParsePhase('📋 正在进行标准项匹配...');
-            const quoteItems: QuoteItem[] = json.items.map((raw: any) => {
-                const match = matchStandardItem(raw.name || '');
-                const risks: QuoteRisk[] = [];
-
-                // 检查价格异常
-                if (match && raw.unitPrice) {
-                    const priceRange = match.item.commonPriceRange;
-                    if (raw.unitPrice < priceRange.min * 0.6) {
-                        risks.push({
-                            type: 'price_low', level: 'high',
-                            description: `单价${raw.unitPrice}元明显低于市场参考价${priceRange.min}-${priceRange.max}元，可能是低价引流后续增项`,
-                            suggestion: '询问该价格包含的具体内容和材料品牌，确认是否有后续加价项',
-                        });
-                    }
-                    if (raw.unitPrice > priceRange.max * 1.5) {
-                        risks.push({
-                            type: 'price_high', level: 'medium',
-                            description: `单价${raw.unitPrice}元高于常见市场价${priceRange.min}-${priceRange.max}元`,
-                            suggestion: '确认高出部分对应的品牌、工艺或材料升级，判断是否合理',
-                        });
-                    }
-                }
-
-                // 检查模糊项
-                if (match && match.item.commonTricks.length > 0 && match.confidence > 0.7) {
-                    risks.push({
-                        type: 'trick', level: 'medium',
-                        description: `该项目常见的增项陷阱：${match.item.commonTricks[0]}`,
-                        suggestion: `建议追问：${match.item.commonTricks.slice(0, 2).join('；')}`,
-                    });
-                }
-
-                // 低匹配度
-                if (match && match.confidence < 0.7) {
-                    risks.push({
-                        type: 'vague', level: 'low',
-                        description: `项目名称"${raw.name}"表述不够标准，不确定对应哪个标准项`,
-                        suggestion: '要求装修公司明确该项具体施工内容、材料品牌和工艺标准',
-                    });
-                }
-
-                return {
-                    id: uuid(),
-                    rawName: raw.name || '未知项目',
-                    standardName: match?.item.standardName || null,
-                    standardItemId: match?.item.id || null,
-                    matchConfidence: match?.confidence || 0,
-                    quantity: raw.quantity,
-                    unit: raw.unit || '',
-                    unitPrice: raw.unitPrice,
-                    subtotal: raw.subtotal || (raw.quantity && raw.unitPrice ? raw.quantity * raw.unitPrice : null),
-                    risks,
-                };
-            });
-
-            // 阶段3：漏项检测
-            setParsePhase('⚠️ 正在检查缺失项目...');
-            const foundItemIds = new Set(quoteItems.map(q => q.standardItemId).filter(Boolean));
-            const essentialItems = STANDARD_ITEMS.filter(s => s.isHighFrequency && s.isCommonMissingRelated);
-            const missingItems = essentialItems
-                .filter(s => !foundItemIds.has(s.id))
-                .map(s => s.standardName);
-
-            // 阶段4：生成报告
-            setParsePhase('📊 正在生成体检报告...');
-            const allRisks = quoteItems.flatMap(q => q.risks);
-            const riskCount = {
-                high: allRisks.filter(r => r.level === 'high').length,
-                medium: allRisks.filter(r => r.level === 'medium').length,
-                low: allRisks.filter(r => r.level === 'low').length,
-            };
-
-            // 评分逻辑：基础80分，高风险-10、中风险-5、低风险-2、漏项-3
-            let score = 80;
-            score -= riskCount.high * 10;
-            score -= riskCount.medium * 5;
-            score -= riskCount.low * 2;
-            score -= missingItems.length * 3;
-            score = Math.max(0, Math.min(100, score));
-
-            const totalAmount = json.totalAmount || quoteItems.reduce((s, q) => s + (q.subtotal || 0), 0);
-
-            // 生成建议
-            const suggestions: string[] = [];
-            if (riskCount.high > 0) suggestions.push('有高风险项需要重点关注，建议和装修公司逐项确认');
-            if (missingItems.length > 0) suggestions.push(`可能缺少${missingItems.length}项常见项目，建议确认是否需要后续增项`);
-            if (quoteItems.some(q => !q.unitPrice)) suggestions.push('部分项目缺少单价信息，建议要求装修公司补全');
-            if (quoteItems.some(q => q.risks.some(r => r.type === 'price_low'))) {
-                suggestions.push('存在疑似低价引流项，务必确认该价格包含的具体内容');
-            }
-
-            setReport({
-                score,
-                totalItems: quoteItems.length,
-                totalAmount,
-                items: quoteItems,
-                missingItems,
-                risks: riskCount,
-                suggestions,
-            });
-
+            const res = await quoteApi.checkText(currentHouse?.id || 'default', input);
+            setReport(res);
         } catch (error: any) {
-            Toast.show({ content: `分析失败: ${error.message}`, icon: 'fail' });
+            Toast.show({ content: `解析失败: ${error.message}`, icon: 'fail' });
+        } finally {
+            setLoading(false);
+            setParsePhase('');
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setLoading(true);
+        setReport(null);
+        setParsePhase('📸 正在通过 AI 识别照片内容...');
+
+        try {
+            const res = await quoteApi.upload(currentHouse?.id || 'default', file);
+            if (res.error) {
+                Toast.show({ content: res.error, icon: 'fail' });
+            } else {
+                setReport(res);
+                Toast.show({ content: '识别成功', icon: 'success' });
+            }
+        } catch (error: any) {
+            Toast.show({ content: `识别失败: ${error.message}`, icon: 'fail' });
         } finally {
             setLoading(false);
             setParsePhase('');
@@ -211,199 +79,144 @@ export default function QuoteCheck() {
     };
 
     return (
-        <div style={{ background: 'var(--color-bg)', minHeight: '100vh' }}>
+        <div style={{ background: 'var(--color-bg)', minHeight: '100vh', paddingBottom: 40 }}>
             <NavBar onBack={() => navigate(-1)} style={{ background: '#fff' }}>
                 报价单体检
             </NavBar>
 
+            <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleImageUpload}
+            />
+
             {!report ? (
-                // ===== 输入阶段 =====
                 <div style={{ padding: 16 }}>
                     <div style={{
-                        padding: 14, background: '#EEF2FF', borderRadius: 10,
-                        fontSize: 13, color: '#4338CA', lineHeight: 1.5, marginBottom: 16,
+                        padding: 16, background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+                        borderRadius: 16, color: '#fff', marginBottom: 20, boxShadow: '0 8px 16px rgba(79, 70, 229, 0.2)',
                     }}>
-                        💡 将装修公司的报价单内容粘贴到下方，AI会帮你逐项分析价格是否合理、是否有漏项、是否存在增项风险。
+                        <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>AI 拍照审报价</h2>
+                        <p style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.6, marginBottom: 20 }}>
+                            上传装修公司给的纸质报价单照片，AI 自动解析每一项，找出高价坑、低价漏，帮你省下数万元。
+                        </p>
+                        <Button
+                            block
+                            color="default"
+                            size="large"
+                            shape="rounded"
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{
+                                background: '#fff', color: '#4F46E5', border: 'none',
+                                fontWeight: 700, height: 48, filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.1))',
+                            }}
+                        >
+                            <CameraOutline style={{ fontSize: 18, verticalAlign: 'middle', marginRight: 8 }} />
+                            拍个照识别
+                        </Button>
+                    </div>
+
+                    <div style={{ padding: '0 4px 12px', fontSize: 14, fontWeight: 600, color: 'var(--color-text)' }}>
+                        或者粘贴报价内容
                     </div>
 
                     <TextArea
-                        placeholder={`请粘贴报价单内容，格式示例：
-
-1. 水电改造  套内面积89㎡  120元/㎡  10680元
-2. 防水  卫生间+厨房约15㎡  80元/㎡  1200元
-3. 铺地砖  客餐厅+厨卫约55㎡  65元/㎡  3575元
-4. 墙面基层处理  约210㎡  28元/㎡  5880元
-5. 乳胶漆  约210㎡  18元/㎡  3780元
-...
-
-也可以直接粘贴微信聊天记录、Excel内容等`}
+                        placeholder="在此粘贴报价单内容，或装修公司的聊天记录"
                         value={input}
                         onChange={setInput}
-                        autoSize={{ minRows: 10, maxRows: 20 }}
+                        autoSize={{ minRows: 8, maxRows: 12 }}
                         style={{
-                            background: '#fff',
-                            borderRadius: 12,
-                            padding: 14,
-                            fontSize: 14,
-                            lineHeight: 1.6,
-                            border: '1px solid var(--color-border)',
+                            background: '#fff', borderRadius: 12, padding: 14,
+                            fontSize: 14, lineHeight: 1.6, border: '1px solid var(--color-border)',
                         }}
                     />
 
                     {loading && (
-                        <div style={{
-                            marginTop: 16, padding: 16, background: '#fff', borderRadius: 12,
-                            display: 'flex', alignItems: 'center', gap: 10,
-                        }}>
+                        <div style={{ marginTop: 16, textAlign: 'center' }}>
                             <DotLoading color="primary" />
-                            <span style={{ fontSize: 14, color: 'var(--color-primary)' }}>{parsePhase}</span>
+                            <div style={{ fontSize: 13, color: 'var(--color-primary)', marginTop: 8 }}>{parsePhase}</div>
                         </div>
                     )}
 
                     <Button
                         block color="primary" size="large" shape="rounded"
                         loading={loading} disabled={!input.trim()}
-                        onClick={handleAnalyze}
-                        style={{ marginTop: 16, height: 48, fontWeight: 600, fontSize: 16 }}
+                        onClick={handleTextAnalyze}
+                        style={{ marginTop: 16, height: 48, fontWeight: 600 }}
                     >
-                        🔍 开始体检
+                        🔍 文本体检
                     </Button>
                 </div>
             ) : (
-                // ===== 报告阶段 =====
                 <div style={{ padding: 12 }}>
-                    {/* 评分卡片 */}
                     <div style={{
                         background: report.score >= 70 ? 'linear-gradient(135deg, #059669, #10B981)' :
                             report.score >= 40 ? 'linear-gradient(135deg, #D97706, #F59E0B)' :
                                 'linear-gradient(135deg, #DC2626, #EF4444)',
                         borderRadius: 16, padding: 24, color: '#fff', marginBottom: 16,
                     }}>
-                        <div style={{ fontSize: 13, opacity: 0.9 }}>报价单体检评分</div>
+                        <div style={{ fontSize: 13, opacity: 0.9 }}>体检评分: {report.score >= 80 ? '良好' : report.score >= 60 ? '一般' : '风险较高'}</div>
                         <div style={{ fontSize: 56, fontWeight: 700, margin: '8px 0' }}>{report.score}</div>
                         <div style={{ fontSize: 13, opacity: 0.8 }}>
-                            共{report.totalItems}个项目 · 合计约{formatMoney(report.totalAmount)}
+                            分析了{report.items.length}个项目 · 总金额约{formatMoney(report.total_amount)}
                         </div>
-                        <div style={{ display: 'flex', gap: 12, marginTop: 12 }}>
+                        <div style={{ display: 'flex', gap: 12, marginTop: 12, fontSize: 12 }}>
                             <span>🔴 高风险 {report.risks.high}</span>
                             <span>🟡 中风险 {report.risks.medium}</span>
                             <span>🟢 低风险 {report.risks.low}</span>
                         </div>
                     </div>
 
-                    {/* 建议 */}
                     {report.suggestions.length > 0 && (
                         <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-                            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>📋 总体建议</h3>
+                            <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10 }}>专家建议</h3>
                             {report.suggestions.map((s, i) => (
-                                <div key={i} style={{
-                                    padding: '8px 12px', background: '#F9FAFB', borderRadius: 8,
-                                    marginBottom: 6, fontSize: 13, lineHeight: 1.5,
-                                }}>
-                                    {i + 1}. {s}
-                                </div>
+                                <div key={i} style={{ color: '#4B5563', fontSize: 13, lineHeight: 1.6, marginBottom: 6 }}>• {s}</div>
                             ))}
                         </div>
                     )}
 
-                    {/* 缺失项目 */}
-                    {report.missingItems.length > 0 && (
-                        <div style={{ background: '#FEF2F2', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-                            <h3 style={{ fontSize: 15, fontWeight: 600, color: '#DC2626', marginBottom: 10 }}>
-                                ⚠️ 可能缺失的项目（{report.missingItems.length}项）
-                            </h3>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                                {report.missingItems.map(name => (
-                                    <Tag key={name} color="danger" fill="outline" style={{ fontSize: 12 }}>
-                                        {name}
-                                    </Tag>
-                                ))}
-                            </div>
-                            <div style={{ fontSize: 12, color: '#991B1B', marginTop: 8, lineHeight: 1.5 }}>
-                                以上项目在报价单中未发现，可能后续会作为增项收费。建议提前和装修公司确认是否包含。
-                            </div>
-                        </div>
-                    )}
-
-                    {/* 逐项分析 */}
-                    <div style={{ background: '#fff', borderRadius: 12, padding: 16, marginBottom: 16 }}>
-                        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>🔍 逐项分析</h3>
-                        {report.items.map(item => (
-                            <div key={item.id} style={{
-                                padding: '12px',
-                                background: item.risks.some(r => r.level === 'high') ? '#FEF2F2' :
-                                    item.risks.some(r => r.level === 'medium') ? '#FFFBEB' : '#F9FAFB',
-                                borderRadius: 10, marginBottom: 10,
+                    <div style={{ background: '#fff', borderRadius: 12, padding: 16 }}>
+                        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>分析详情</h3>
+                        {report.items.map((item, idx) => (
+                            <div key={idx} style={{
+                                padding: '12px', background: '#F9FAFB', borderRadius: 10, marginBottom: 10,
+                                border: item.risks.length > 0 ? '1px solid #FEE2E2' : '1px solid #F3F4F6'
                             }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                                    <div>
-                                        <span style={{ fontSize: 14, fontWeight: 600 }}>{item.rawName}</span>
-                                        {item.standardName && item.standardName !== item.rawName && (
-                                            <span style={{ fontSize: 11, color: 'var(--color-primary)', marginLeft: 6 }}>
-                                                → {item.standardName}
-                                            </span>
-                                        )}
-                                    </div>
-                                    {item.subtotal && (
-                                        <span style={{ fontSize: 14, fontWeight: 600 }}>{formatMoney(item.subtotal)}</span>
-                                    )}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                    <span style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</span>
+                                    <span style={{ fontWeight: 600 }}>{formatMoney(item.subtotal || 0)}</span>
                                 </div>
-
-                                {/* 数量单价 */}
-                                <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                                    {item.quantity && `${item.quantity}${item.unit}`}
-                                    {item.unitPrice && ` × ${item.unitPrice}元/${item.unit}`}
-                                    {item.matchConfidence > 0 && (
-                                        <span style={{ marginLeft: 8 }}>
-                                            匹配度：
-                                            <span style={{
-                                                color: item.matchConfidence > 0.8 ? '#059669' :
-                                                    item.matchConfidence > 0.5 ? '#D97706' : '#DC2626'
-                                            }}>
-                                                {Math.round(item.matchConfidence * 100)}%
-                                            </span>
-                                        </span>
-                                    )}
+                                <div style={{ fontSize: 11, color: 'var(--color-text-light)', marginBottom: 8 }}>
+                                    {item.quantity}{item.unit} × {item.unitPrice}元/{item.unit}
                                 </div>
-
-                                {/* 风险 */}
-                                {item.risks.map((risk, idx) => (
-                                    <div key={idx} style={{
-                                        padding: '8px 10px',
-                                        background: risk.level === 'high' ? '#FEE2E2' : risk.level === 'medium' ? '#FEF3C7' : '#F3F4F6',
-                                        borderRadius: 6, marginTop: 6, fontSize: 12, lineHeight: 1.5,
+                                {item.risks.map((risk, ridx) => (
+                                    <div key={ridx} style={{
+                                        color: risk.level === 'high' ? '#DC2626' : '#D97706',
+                                        fontSize: 12, background: risk.level === 'high' ? '#FEF2F2' : '#FFFBEB',
+                                        padding: '4px 8px', borderRadius: 4, marginTop: 4
                                     }}>
-                                        <div style={{
-                                            color: risk.level === 'high' ? '#DC2626' : risk.level === 'medium' ? '#D97706' : '#6B7280',
-                                            fontWeight: 500,
-                                        }}>
-                                            {risk.level === 'high' ? '🔴' : risk.level === 'medium' ? '🟡' : '🟢'} {risk.description}
-                                        </div>
-                                        <div style={{ color: '#4B5563', marginTop: 4 }}>
-                                            💬 {risk.suggestion}
-                                        </div>
+                                        ⚠️ {risk.desc}
                                     </div>
                                 ))}
                             </div>
                         ))}
                     </div>
 
-                    {/* 反馈 */}
-                    <FeedbackWidget type="ai" />
-
-                    {/* 操作按钮 */}
-                    <div style={{ display: 'flex', gap: 10, marginBottom: 40 }}>
-                        <Button block fill="outline" color="primary" shape="rounded"
-                            onClick={() => { setReport(null); setInput(''); }}>
-                            重新体检
+                    <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+                        <Button block shape="rounded" fill="outline" onClick={() => setReport(null)}>
+                            重新上传
                         </Button>
-                        <Button block color="primary" shape="rounded"
-                            onClick={() => Toast.show({ content: '报告已保存', icon: 'success' })}>
-                            保存报告
+                        <Button block shape="rounded" color="primary" onClick={() => navigate('/consult')}>
+                            咨询 AI 助理
                         </Button>
                     </div>
                 </div>
             )}
+            <FeedbackWidget type="ai" />
         </div>
     );
 }

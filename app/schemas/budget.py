@@ -2,7 +2,7 @@ import uuid
 from pydantic import BaseModel
 
 class BudgetCalcRequest(BaseModel):
-    project_id: uuid.UUID
+    project_id: uuid.UUID | None = None
     city_code: str
     inner_area: float
     layout_type: str

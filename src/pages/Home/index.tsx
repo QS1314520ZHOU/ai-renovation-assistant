@@ -12,6 +12,8 @@ const features = [
 ];
 
 
+import JourneyMap from '@/components/JourneyMap';
+
 export default function Home() {
   const navigate = useNavigate();
   const { nickname, logout } = useAuthStore();
@@ -30,34 +32,21 @@ export default function Home() {
       {/* Hero */}
       <div style={{
         background: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
-        padding: '40px 20px 50px',
+        padding: '30px 20px 60px',
         borderRadius: '0 0 24px 24px',
         color: '#fff',
       }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>AI装修预算助手</h1>
-        <p style={{ fontSize: 14, opacity: 0.9, lineHeight: 1.6, marginBottom: 24 }}>
-          帮你算清装修账、看懂报价单、避开装修坑
+        <p style={{ fontSize: 13, opacity: 0.9, lineHeight: 1.6 }}>
+          跟着生命周期走，装修其实很简单
         </p>
-        <Button
-          color="default"
-          size="large"
-          shape="rounded"
-          style={{
-            width: '100%',
-            fontWeight: 600,
-            fontSize: 16,
-            height: 48,
-            '--background-color': '#fff',
-            '--text-color': '#4F46E5',
-          } as any}
-          onClick={() => navigate('/ai-consult')}
-        >
-          🚀 开始装修
-        </Button>
       </div>
 
+      {/* Onboarding Journey */}
+      <JourneyMap />
+
       {/* Feature Grid */}
-      <div style={{ padding: '20px 16px' }}>
+      <div style={{ padding: '0 16px 20px' }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: 'var(--color-text)' }}>
           我想做什么？
         </h2>

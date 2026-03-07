@@ -12,46 +12,49 @@ export interface BudgetCategory {
 
 export interface BudgetItem {
     id: string;
-    schemeId: string;
-    roomId: string | null;
+    scheme_id: string;
+    room_id: string | null;
     category: string;
-    standardItemId: string;
-    itemName: string;
-    pricingMode: PricingMode;
+    standard_item_id: string;
+    item_name: string;
+    pricing_mode: PricingMode;
     quantity: number;
     unit: string;
-    materialUnitPrice: number;
-    laborUnitPrice: number;
-    accessoryUnitPrice: number;
-    lossRate: number;
+    material_unit_price: number;
+    labor_unit_price: number;
+    accessory_unit_price: number;
+    loss_rate: number;
     subtotal: number;
-    tierLevel: TierLevel;
-    dataSource: string;
-    isUserModified: boolean;
-    remark: string;
+    data_source: string;
+    is_user_modified: boolean;
+    remark?: string;
 }
 
 export interface BudgetScheme {
     id: string;
-    projectId: string;
-    tierLevel: TierLevel;
-    totalBudget: number;
-    hardDecorationBudget: number;
-    mainMaterialBudget: number;
-    kitchenBathroomBudget: number;
-    customBudget: number;
-    otherBudget: number;
-    contingencyBudget: number;
+    project_id: string;
+    tier: TierLevel;
+    total_amount: number;
+    material_amount: number;
+    labor_amount: number;
+    management_fee: number;
+    contingency: number;
     items: BudgetItem[];
     createdAt: string;
+    // Legacy mapping (to be removed after refactoring components)
+    totalBudget?: number;
 }
 
 export interface BudgetResult {
-    economy: BudgetScheme;
-    standard: BudgetScheme;
-    premium: BudgetScheme;
-    missingItems: MissingItem[];
-    optimizations: OptimizationSuggestion[];
+    project_id: string;
+    schemes: BudgetScheme[];
+    economy?: BudgetScheme;
+    standard?: BudgetScheme;
+    premium?: BudgetScheme;
+    missing_items: any[];
+    suggestions: string[];
+    missingItems: MissingItem[]; // Legacy support
+    optimizations: OptimizationSuggestion[]; // Legacy support
     overBudget: boolean;
     overBudgetAmount: number;
 }

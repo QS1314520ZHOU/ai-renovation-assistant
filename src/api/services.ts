@@ -70,42 +70,11 @@ export const houseApi = {
     get: (projectId: string) => http.get<House>(`/houses/${projectId}`),
 };
 
-// ---- 预算 ----
-export interface BudgetScheme {
-    id: string;
-    tier: string;
-    total_amount: number | null;
-    material_amount: number | null;
-    labor_amount: number | null;
-    management_fee: number | null;
-    contingency: number | null;
-    ai_explanation: string | null;
-    items: BudgetItem[];
-}
-
-export interface BudgetItem {
-    id: string;
-    category: string;
-    item_name: string;
-    quantity: number | null;
-    unit: string | null;
-    material_unit_price: number | null;
-    labor_unit_price: number | null;
-    subtotal: number | null;
-    is_user_modified: boolean;
-    data_source: string | null;
-}
-
-export interface BudgetResult {
-    project_id: string;
-    schemes: BudgetScheme[];
-    missing_items: any[];
-    suggestions: string[];
-}
+import { BudgetResult, BudgetScheme } from '@/types';
 
 export const budgetApi = {
     calculate: (data: {
-        project_id: string;
+        project_id?: string;
         city_code: string;
         inner_area: number;
         layout_type: string;
@@ -167,6 +136,24 @@ export const constructionApi = {
 
     getPayments: (projectId: string) =>
         http.get<any[]>(`/payments/${projectId}`),
+};
+
+// ---- 报价体检 ----
+export const quoteApi = {
+    upload: (projectId: string, file: File) => {
+        const formData = new FormData();
+        formData.append('project_id', projectId);
+        formData.append('file', file);
+        return http.post<any>('/quotes/upload', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        });
+    },
+
+    checkText: (projectId: string, text: string) =>
+        http.post<any>('/quotes/check-text', { project_id: projectId, text }),
+
+    getReport: (quoteId: string) =>
+        http.get<any>(`/quotes/${quoteId}/report`),
 };
 
 // ---- 系统配置 ----

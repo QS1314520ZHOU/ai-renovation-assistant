@@ -1,6 +1,7 @@
 import uuid
 import json
 import re
+import base64
 from typing import List, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -8,7 +9,6 @@ from openai import AsyncOpenAI
 from app.config import settings
 from app.models.quote import QuoteUpload, QuoteItem, QuoteRiskReport
 from app.models.pricing import PricingStandardItem, PricingRule
-from app.models.project import RenovationProject
 
 QUOTE_PARSE_PROMPT = """你是一个装修报价单分析专家。请将以下报价单内容解析为结构化JSON格式。
 
@@ -46,11 +46,41 @@ class QuoteService:
         )
 
     async def upload_and_parse(self, project_id: uuid.UUID, file):
-        # OCR logic would go here, currently we only support text check in a simplified way
-        return {"message": "OCR not yet implemented locally"}
+        # 1. Read file and encode to base64
+        contents = await file.read()
+        base64_image = base64.b64encode(contents).decode('utf-8')
+        
+        # 2. AI Vision Parsing
+        parse_result = await self.client.chat.completions.create(
+            model=settings.AI_MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": QUOTE_PARSE_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{file.content_type};base64,{base64_image}"
+                            }
+                        }
+                    ]
+                }
+            ],
+            temperature=0.3,
+            max_tokens=3000,
+        )
+        
+        raw_content = parse_result.choices[0].message.content
+        json_data = self._extract_json(raw_content)
+        
+        if not json_data or "items" not in json_data:
+            return {"error": "Failed to parse image content"}
+
+        return await self._process_parsed_data(project_id, json_data, "image_upload")
 
     async def check_from_text(self, project_id: uuid.UUID, text: str):
-        # 1. AI Parsing
+        # 1. AI Parsing from text
         parse_result = await self.client.chat.completions.create(
             model=settings.AI_MODEL,
             messages=[
@@ -66,20 +96,23 @@ class QuoteService:
         if not json_data or "items" not in json_data:
             return {"error": "Failed to parse quote content"}
 
+        return await self._process_parsed_data(project_id, json_data, "text_input")
+
+    async def _process_parsed_data(self, project_id: uuid.UUID, json_data: dict, source: str):
         # 2. Save Upload Record
         upload = QuoteUpload(
             project_id=project_id,
-            file_url="text_input",
-            file_name="粘贴内容",
+            file_url=source,
+            file_name="报价单解析",
             ocr_status="completed",
-            ocr_raw_text=text,
+            ocr_raw_text=json_data.get("notes", ""),
             parsed_data=json_data
         )
         self.db.add(upload)
         await self.db.flush()
 
         # 3. Analyze Items and Risks
-        quote_items = []
+        quote_items_out = []
         high_risks = 0
         medium_risks = 0
         low_risks = 0
@@ -91,17 +124,14 @@ class QuoteService:
 
         for idx, item in enumerate(json_data.get("items", [])):
             name = item.get("name", "未知项目")
-            # Simple fuzzy matching or alias matching could go here
             matched_std = self._match_standard_item(name, std_items)
             
             risks = []
             if matched_std:
-                # Get pricing rules for this item
                 rules_result = await self.db.execute(
                     select(PricingRule).where(PricingRule.standard_item_id == matched_std.id)
                 )
                 rules = rules_result.scalars().all()
-                # Check price (simple check)
                 if item.get("unitPrice") and rules:
                     avg_price = sum(float(r.material_unit_price + r.labor_unit_price) for r in rules) / len(rules)
                     if float(item["unitPrice"]) < avg_price * 0.6:
@@ -123,7 +153,7 @@ class QuoteService:
                 sort_order=idx
             )
             self.db.add(quote_item)
-            quote_items.append({"name": name, "risks": risks})
+            quote_items_out.append({"name": name, "risks": risks, "unitPrice": item.get("unitPrice"), "subtotal": item.get("subtotal"), "unit": item.get("unit"), "quantity": item.get("quantity")})
             all_risks.extend(risks)
 
         # 4. Generate Report
@@ -147,7 +177,10 @@ class QuoteService:
             "quote_id": str(upload.id),
             "report_id": str(report.id),
             "score": score,
-            "items": quote_items
+            "total_amount": json_data.get("totalAmount"),
+            "items": quote_items_out,
+            "risks": {"high": high_risks, "medium": medium_risks, "low": low_risks},
+            "suggestions": report.suggestions_json
         }
 
     async def get_report(self, quote_id: uuid.UUID):
@@ -165,7 +198,6 @@ class QuoteService:
         return {}
 
     def _match_standard_item(self, name: str, std_items: List[PricingStandardItem]) -> PricingStandardItem:
-        # Simplified matching
         for item in std_items:
             if item.name == name or name in (item.aliases_json or []):
                 return item
