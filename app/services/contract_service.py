@@ -123,7 +123,6 @@ class ContractService:
             return await self._save_and_report(project_id, json_data, "text_input")
         except Exception as e:
             return {"error": str(e)}
-
     async def _save_and_report(self, project_id: uuid.UUID, json_data: dict, source: str):
         upload = ContractUpload(
             project_id=project_id,
@@ -163,7 +162,7 @@ class ContractService:
             "risks_json": risks,
             "payment_terms": json_data.get("payment_terms", {}),
             "recommendations": json_data.get("recommendations", []),
-            "summary": report.ai_summary
+            "summary": report.ai_summary,
         }
 
     async def get_report(self, report_id: uuid.UUID):
