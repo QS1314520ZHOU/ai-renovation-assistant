@@ -1,6 +1,6 @@
 import React from 'react';
-import { Popup, List, Badge, Button, Empty } from 'antd-mobile';
-import { BellOutline, CheckCircleOutline, ExclamationTriangleOutline, CloseCircleOutline, InformationCircleOutline } from 'antd-mobile-icons';
+import { Popup, List, Badge, Button } from 'antd-mobile';
+import { CheckCircleOutline, ExclamationTriangleOutline, CloseCircleOutline, InformationCircleOutline } from 'antd-mobile-icons';
 import { useNotificationStore } from '@/store';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -17,9 +17,9 @@ interface NotificationCenterProps {
 
 export const NotificationCenter: React.FC<NotificationCenterProps> = ({ visible, onClose }) => {
     const { notifications, markAsRead, clearAll } = useNotificationStore();
-    const unreadCount = notifications.filter((n: AppNotification) => !n.read).length;
+    const unreadCount = notifications.filter((item: AppNotification) => !item.read).length;
 
-    const getIcon = (type: string) => {
+    const getIcon = (type: AppNotification['type']) => {
         switch (type) {
             case 'success': return <CheckCircleOutline style={{ color: '#10B981' }} />;
             case 'warning': return <ExclamationTriangleOutline style={{ color: '#F59E0B' }} />;
@@ -29,43 +29,44 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({ visible,
     };
 
     return (
-        <Popup
-            visible={visible}
-            onMaskClick={onClose}
-            bodyStyle={{ borderTopLeftRadius: 16, borderTopRightRadius: 16, height: '70vh', display: 'flex', flexDirection: 'column' }}
-        >
-            <div style={{ padding: '16px', borderBottom: '1px solid #F3F4F6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 16, fontWeight: 600 }}>通知中心 {unreadCount > 0 && <Badge content={unreadCount} style={{ marginLeft: 4 }} />}</div>
-                <Button size="mini" fill="none" onClick={clearAll} style={{ fontSize: 12, color: '#9CA3AF' }}>清除全部</Button>
+        <Popup visible={visible} onMaskClick={onClose} bodyStyle={{ height: '72vh', display: 'flex', flexDirection: 'column', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="page-topbar" style={{ borderRadius: 0, boxShadow: 'none', padding: '18px 18px 14px' }}>
+                <div>
+                    <div className="page-kicker" style={{ background: 'rgba(99, 102, 241, 0.10)', color: 'var(--color-primary)' }}>消息中心</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--color-text)' }}>通知</div>
+                        {unreadCount > 0 && <Badge content={unreadCount} />}
+                    </div>
+                </div>
+                <Button size="small" fill="none" onClick={clearAll}>清空全部</Button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 12px' }}>
                 {notifications.length === 0 ? (
-                    <Empty description="暂无新消息" style={{ marginTop: 60 }} />
+                    <div className="empty-card" style={{ marginTop: 20 }}>
+                        <div className="empty-title">暂时没有通知</div>
+                        <div className="empty-desc">系统提醒、预算完成和施工节点消息会出现在这里。</div>
+                    </div>
                 ) : (
                     <List>
-                        {notifications.map((n: AppNotification) => (
+                        {notifications.map((item: AppNotification) => (
                             <List.Item
-                                key={n.id}
-                                prefix={getIcon(n.type)}
-                                extra={<div style={{ fontSize: 11, color: '#9CA3AF' }}>{dayjs(n.createdAt).fromNow()}</div>}
-                                description={n.content}
-                                onClick={() => markAsRead(n.id)}
-                                style={{
-                                    '--prefix-width': '24px',
-                                    '--padding-left': '16px',
-                                    background: n.read ? 'transparent' : '#F0FDF4',
-                                } as any}
+                                key={item.id}
+                                prefix={getIcon(item.type)}
+                                extra={<div style={{ fontSize: 11, color: 'var(--color-text-light)' }}>{dayjs(item.createdAt).fromNow()}</div>}
+                                description={item.content}
+                                onClick={() => markAsRead(item.id)}
+                                style={{ '--prefix-width': '24px', '--padding-left': '16px', background: item.read ? 'rgba(255, 255, 255, 0.72)' : 'rgba(238, 242, 255, 0.88)' } as React.CSSProperties}
                             >
-                                <div style={{ fontSize: 14, fontWeight: n.read ? 400 : 600 }}>{n.title}</div>
+                                <div style={{ fontSize: 14, fontWeight: item.read ? 600 : 700, color: 'var(--color-text)' }}>{item.title}</div>
                             </List.Item>
                         ))}
                     </List>
                 )}
             </div>
 
-            <div style={{ padding: '16px', borderTop: '1px solid #F3F4F6' }}>
-                <Button block onClick={onClose}>关闭</Button>
+            <div style={{ padding: '12px 16px 16px' }}>
+                <Button block color="primary" shape="rounded" onClick={onClose}>我知道了</Button>
             </div>
         </Popup>
     );

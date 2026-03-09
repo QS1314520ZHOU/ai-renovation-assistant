@@ -1,19 +1,8 @@
-// src/api/http.ts
-
-function toCamel(obj: any): any {
-    if (Array.isArray(obj)) return obj.map(toCamel);
-    if (obj !== null && typeof obj === 'object') {
-        return Object.keys(obj).reduce((result, key) => {
-            const camelKey = key.replace(/([-_][a-z])/gi, ($1) => $1.toUpperCase().replace('-', '').replace('_', ''));
-            result[camelKey] = toCamel(obj[key]);
-            return result;
-        }, {} as any);
-    }
-    return obj;
-}
+import { clearAuthState, getAuthToken } from '@/store/authStore';
 
 function toSnake(obj: any): any {
     if (Array.isArray(obj)) return obj.map(toSnake);
+
     if (obj !== null && typeof obj === 'object') {
         return Object.keys(obj).reduce((result, key) => {
             const snakeKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
@@ -21,7 +10,25 @@ function toSnake(obj: any): any {
             return result;
         }, {} as any);
     }
+
     return obj;
+}
+
+async function extractErrorMessage(response: Response, fallback: string) {
+    try {
+        const cloned = response.clone();
+        const contentType = cloned.headers.get('content-type') || '';
+
+        if (contentType.includes('application/json')) {
+            const json = await cloned.json();
+            return json?.message || json?.detail || json?.error?.message || fallback;
+        }
+
+        const text = (await cloned.text()).trim();
+        return text || fallback;
+    } catch {
+        return fallback;
+    }
 }
 
 const BASE = '/api/v1';
@@ -32,62 +39,63 @@ interface ApiResponse<T = any> {
     data: T;
 }
 
-async function request<T = any>(
-    url: string,
-    options: RequestInit = {}
-): Promise<T> {
-    const token = localStorage.getItem('token');
+async function request<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+    const token = getAuthToken();
     const headers: Record<string, string> = {
         ...(options.headers as Record<string, string>),
     };
 
-    // 如果不是 FormData，则设置 JSON Content-Type 并转换 body 为 snake_case
     if (!(options.body instanceof FormData)) {
         headers['Content-Type'] = 'application/json';
+
         if (options.body && typeof options.body === 'string') {
             try {
                 const parsedBody = JSON.parse(options.body);
                 options.body = JSON.stringify(toSnake(parsedBody));
-            } catch (e) { /* ignore */ }
+            } catch {
+                // Ignore invalid JSON strings and send the original body.
+            }
         }
     }
 
     if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+        headers.Authorization = `Bearer ${token}`;
     }
 
-    const res = await fetch(`${BASE}${url}`, {
+    const response = await fetch(`${BASE}${url}`, {
         ...options,
         headers,
     });
 
-    if (res.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        throw new Error('会话已过期，请重新登录');
+    if (response.status === 401) {
+        clearAuthState();
+
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+            window.location.replace('/login');
+        }
+
+        throw new Error(await extractErrorMessage(response, '登录已失效，请重新登录'));
     }
 
-    if (res.status === 429) {
-        throw new Error('请求过于频繁，请稍后再试');
+    if (response.status === 429) {
+        throw new Error(await extractErrorMessage(response, '请求过于频繁，请稍后再试'));
     }
 
-    if (res.status >= 500) {
-        throw new Error('服务器繁忙，请稍后再试');
+    if (response.status >= 500) {
+        throw new Error(await extractErrorMessage(response, '服务器繁忙，请稍后再试'));
     }
 
-    const json: ApiResponse<T> = await res.json();
+    const json: ApiResponse<T> = await response.json();
 
-    if (!res.ok || json.code !== 0) {
+    if (!response.ok || json.code !== 0) {
         throw new Error(json.message || '请求失败');
     }
 
-    return toCamel(json.data);
+    return json.data;
 }
 
 export const http = {
-    get: <T = any>(url: string, options?: RequestInit) =>
-        request<T>(url, { ...options, method: 'GET' }),
+    get: <T = any>(url: string, options?: RequestInit) => request<T>(url, { ...options, method: 'GET' }),
 
     post: <T = any>(url: string, body?: any, options?: RequestInit) =>
         request<T>(url, {
@@ -103,6 +111,5 @@ export const http = {
             body: body instanceof FormData ? body : (body ? JSON.stringify(body) : undefined),
         }),
 
-    delete: <T = any>(url: string, options?: RequestInit) =>
-        request<T>(url, { ...options, method: 'DELETE' }),
+    delete: <T = any>(url: string, options?: RequestInit) => request<T>(url, { ...options, method: 'DELETE' }),
 };

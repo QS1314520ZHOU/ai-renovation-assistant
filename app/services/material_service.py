@@ -14,7 +14,10 @@ MATERIAL_JSON_EXAMPLE = '''{
       "brand": "品牌名，例如：立邦/多乐士/马可波罗",
       "model_or_series": "型号或系列，例如：抗甲醛净味五合一",
       "estimated_price": "此预算下的参考价格区间，例如：300-400元/桶",
-      "reason": "推荐理由，例如：性价比高，环保认证齐全"
+      "reason": "推荐理由，例如：性价比高，环保认证齐全",
+      "product_image_url": "产品图URL（可为空）",
+      "scene_image_url": "铺贴效果图URL（可为空）",
+      "color_palette": ["#F5F1E8", "#D9C7A1", "#7A5C42"]
     }
   ],
   "buying_tips": [
@@ -101,7 +104,54 @@ class MaterialRecommendationService:
             if not json_data:
                 return {"error": "Failed to generate material recommendations"}
 
+            json_data["recommendations"] = [
+                self._enrich_recommendation_visual(item)
+                for item in (json_data.get("recommendations") or [])
+                if isinstance(item, dict)
+            ]
+
             return json_data
 
         except Exception as e:
             return {"error": str(e)}
+
+    def _enrich_recommendation_visual(self, rec: dict) -> dict:
+        item = dict(rec)
+        brand = str(item.get("brand") or "").lower()
+        category = str(item.get("model_or_series") or "").lower()
+        seed = f"{brand} {category}"
+
+        if not item.get("product_image_url"):
+            item["product_image_url"] = self._pick_product_image(seed)
+        if not item.get("scene_image_url"):
+            item["scene_image_url"] = self._pick_scene_image(seed)
+        if not isinstance(item.get("color_palette"), list) or not item.get("color_palette"):
+            item["color_palette"] = self._pick_palette(seed)
+        return item
+
+    def _pick_product_image(self, seed: str) -> str:
+        if any(k in seed for k in ["瓷砖", "马可波罗", "东鹏"]):
+            return "https://images.unsplash.com/photo-1600607688960-e095ff83135f?auto=format&fit=crop&w=1200&q=80"
+        if any(k in seed for k in ["乳胶漆", "立邦", "多乐士"]):
+            return "https://images.unsplash.com/photo-1562259949-e8e7689d7828?auto=format&fit=crop&w=1200&q=80"
+        if any(k in seed for k in ["地板", "木"]):
+            return "https://images.unsplash.com/photo-1616627561839-074385245ff6?auto=format&fit=crop&w=1200&q=80"
+        if any(k in seed for k in ["马桶", "花洒", "卫浴"]):
+            return "https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=1200&q=80"
+        return "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1200&q=80"
+
+    def _pick_scene_image(self, seed: str) -> str:
+        if any(k in seed for k in ["瓷砖", "地板"]):
+            return "https://images.unsplash.com/photo-1616486029423-aaa4789e8c9a?auto=format&fit=crop&w=1200&q=80"
+        if any(k in seed for k in ["卫浴", "马桶", "花洒"]):
+            return "https://images.unsplash.com/photo-1631889993959-41b4e9c6e3c3?auto=format&fit=crop&w=1200&q=80"
+        return "https://images.unsplash.com/photo-1616594039964-8db67f4f62f5?auto=format&fit=crop&w=1200&q=80"
+
+    def _pick_palette(self, seed: str) -> list[str]:
+        if any(k in seed for k in ["木", "地板", "北欧", "日式"]):
+            return ["#E8D8C3", "#C9A882", "#7B5A3E", "#F8F3EA"]
+        if any(k in seed for k in ["轻奢", "石", "岩板"]):
+            return ["#F3F4F6", "#D1D5DB", "#6B7280", "#111827"]
+        if any(k in seed for k in ["新中式"]):
+            return ["#EEE4D4", "#B08968", "#5C3D2E", "#2F241F"]
+        return ["#F1F5F9", "#CBD5E1", "#64748B", "#1E293B"]

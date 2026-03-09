@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NavBar, Tag, Empty } from 'antd-mobile';
+import { Button } from 'antd-mobile';
 import { useProjectStore } from '@/store';
 import { formatMoney } from '@/utils/format';
 import { useGlossaryStore } from '@/store/glossaryStore';
@@ -17,82 +17,70 @@ export default function MissingCheck() {
     }, [initGlossary]);
 
     const items = budgetResult?.missingItems || [];
+    const stats = [
+        { label: '高风险', value: items.filter((item) => item.riskLevel === 'high').length, color: '#be123c', background: '#fff1f2' },
+        { label: '中风险', value: items.filter((item) => item.riskLevel === 'medium').length, color: '#b45309', background: '#fff7ed' },
+        { label: '低风险', value: items.filter((item) => item.riskLevel === 'low').length, color: '#047857', background: '#ecfdf5' },
+    ];
 
     return (
-        <div style={{ background: 'var(--color-bg)', minHeight: '100vh' }}>
-            <NavBar onBack={() => navigate(-1)} style={{ background: '#fff' }}>
-                漏项检查
-            </NavBar>
+        <div className="page-shell page-shell--no-tabbar">
+            <div className="page-stack">
+                <div className="page-topbar">
+                    <div>
+                        <div className="page-kicker" style={{ background: 'rgba(244, 114, 182, 0.10)', color: '#db2777' }}>漏项检查</div>
+                        <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: 'var(--color-text)' }}>预算之外，还要防止施工过程里的隐形支出</div>
+                        <div className="muted-text" style={{ fontSize: 13, marginTop: 6 }}>把容易被漏掉、后期容易追加的项目提前提醒出来。</div>
+                    </div>
+                    <Button fill="outline" shape="rounded" onClick={() => navigate(-1)}>
+                        返回
+                    </Button>
+                </div>
 
-            <div style={{ padding: '12px 16px' }}>
-                {/* 统计 */}
-                <div style={{
-                    display: 'flex',
-                    gap: 10,
-                    marginBottom: 16,
-                }}>
-                    {[
-                        { label: '高风险', count: items.filter(i => i.riskLevel === 'high').length, color: '#EF4444', bg: '#FEF2F2' },
-                        { label: '中风险', count: items.filter(i => i.riskLevel === 'medium').length, color: '#F59E0B', bg: '#FFFBEB' },
-                        { label: '低风险', count: items.filter(i => i.riskLevel === 'low').length, color: '#10B981', bg: '#F0FDF4' },
-                    ].map(s => (
-                        <div key={s.label} style={{
-                            flex: 1,
-                            background: s.bg,
-                            borderRadius: 10,
-                            padding: '12px',
-                            textAlign: 'center',
-                        }}>
-                            <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.count}</div>
-                            <div style={{ fontSize: 12, color: s.color }}>{s.label}</div>
+                <div className="stats-grid">
+                    {stats.map((item) => (
+                        <div key={item.label} className="metric-card" style={{ background: item.background }}>
+                            <div className="metric-label" style={{ color: item.color }}>{item.label}</div>
+                            <div className="metric-value mono-number" style={{ fontSize: 28, marginTop: 8, color: item.color }}>{item.value}</div>
                         </div>
                     ))}
                 </div>
 
                 {items.length === 0 ? (
-                    <Empty description="暂无漏项提醒" style={{ marginTop: 60 }} />
+                    <div className="empty-card">
+                        <div className="empty-title">当前没有漏项提醒</div>
+                        <div className="empty-desc">预算结果比较完整时，这里会显示为空。你也可以回到 AI 咨询页继续补充需求。</div>
+                    </div>
                 ) : (
-                    items.map(item => (
-                        <div key={item.id} style={{
-                            background: '#fff',
-                            borderRadius: 12,
-                            padding: '16px',
-                            marginBottom: 12,
-                            boxShadow: 'var(--shadow-sm)',
-                        }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <span style={{ fontSize: 16, fontWeight: 600 }}>
-                                    <TermItem name={item.itemName} />
-                                </span>
+                    items.map((item) => (
+                        <div key={item.id} className="section-card">
+                            <div className="page-section-title" style={{ marginBottom: 8 }}>
+                                <h3><TermItem name={item.itemName} /></h3>
                                 <span className={`risk-${item.riskLevel}`}>
                                     {item.riskLevel === 'high' ? '高风险' : item.riskLevel === 'medium' ? '中风险' : '低风险'}
                                 </span>
                             </div>
 
-                            <div style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.6, marginBottom: 8 }}>
-                                {item.explanation}
-                            </div>
+                            <div className="muted-text" style={{ fontSize: 13 }}>{item.explanation}</div>
 
-                            <div style={{ fontSize: 13, color: '#374151', marginBottom: 8 }}>
-                                💰 预估费用：<b>{formatMoney(item.estimatedPriceMin)} - {formatMoney(item.estimatedPriceMax)}</b>
-                            </div>
-
-                            <div style={{
-                                background: '#F3F4F6',
-                                borderRadius: 8,
-                                padding: '10px 12px',
-                                fontSize: 12,
-                                color: '#4B5563',
-                                lineHeight: 1.5,
-                            }}>
-                                💬 建议追问：{item.askTemplate}
+                            <div className="stats-grid" style={{ marginTop: 14 }}>
+                                <div className="metric-card">
+                                    <div className="metric-label">预估费用区间</div>
+                                    <div className="feature-desc" style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: 'var(--color-text)' }}>
+                                        {formatMoney(item.estimatedPriceMin)} - {formatMoney(item.estimatedPriceMax)}
+                                    </div>
+                                </div>
+                                <div className="metric-card">
+                                    <div className="metric-label">建议追问</div>
+                                    <div className="feature-desc" style={{ marginTop: 8 }}>{item.askTemplate}</div>
+                                </div>
                             </div>
                         </div>
                     ))
                 )}
-            </div>
 
-            <FeedbackWidget type="missing" />
+                <FeedbackWidget type="missing" />
+            </div>
         </div>
     );
 }

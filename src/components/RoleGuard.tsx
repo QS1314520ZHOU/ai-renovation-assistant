@@ -2,8 +2,7 @@
 
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuthStore } from '@/store/authStore';
-import { Toast } from 'antd-mobile';
+import { getAuthToken, useAuthStore } from '@/store/authStore';
 
 interface RoleGuardProps {
     children: React.ReactElement;
@@ -11,14 +10,16 @@ interface RoleGuardProps {
 }
 
 const RoleGuard: React.FC<RoleGuardProps> = ({ children, requiredRole }) => {
-    const { isLoggedIn, role } = useAuthStore();
+    const isLoggedIn = useAuthStore((s) => s.isLoggedIn);
+    const role = useAuthStore((s) => s.role);
+    const token = useAuthStore((s) => s.token);
+    const activeToken = token ?? getAuthToken();
 
-    if (!isLoggedIn) {
+    if (!isLoggedIn || !activeToken) {
         return <Navigate to="/login" replace />;
     }
 
     if (role !== requiredRole) {
-        Toast.show({ content: '权限不足，无法访问此页面', icon: 'fail' });
         return <Navigate to="/" replace />;
     }
 

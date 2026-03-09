@@ -1,6 +1,7 @@
+
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NavBar, Checkbox, Tag, Badge } from 'antd-mobile';
+import { Checkbox, Tag, Badge, Button } from 'antd-mobile';
 import { useConstructionStore } from '@/store';
 import { PHASE_LIST } from '@/engine/constructionData';
 
@@ -10,90 +11,65 @@ export default function Purchases() {
 
     const grouped = useMemo(() => {
         const map = new Map<string, typeof purchases>();
-        PHASE_LIST.forEach(p => {
-            const items = purchases.filter(pu => pu.phase === p.phase);
-            if (items.length > 0) map.set(p.phase, items);
+        PHASE_LIST.forEach((phase) => {
+            const items = purchases.filter((purchase) => purchase.phase === phase.phase);
+            if (items.length > 0) map.set(phase.phase, items);
         });
         return map;
     }, [purchases]);
 
-    const purchasedCount = purchases.filter(p => p.purchased).length;
+    const purchasedCount = purchases.filter((item) => item.purchased).length;
 
     return (
-        <div style={{ background: 'var(--color-bg)', minHeight: '100vh' }}>
-            <NavBar onBack={() => navigate(-1)} style={{ background: '#fff' }}>
-                采购时间表
-            </NavBar>
-
-            <div style={{
-                margin: 12, padding: 14, background: '#fff', borderRadius: 12,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-                <div>
-                    <div style={{ fontSize: 13, color: 'var(--color-text-secondary)' }}>采购进度</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--color-primary)', marginTop: 4 }}>
-                        {purchasedCount} / {purchases.length}
+        <div className="page-shell page-shell--no-tabbar">
+            <div className="page-stack">
+                <div className="page-topbar">
+                    <div>
+                        <div className="page-kicker" style={{ background: 'rgba(14, 165, 233, 0.10)', color: '#0369a1' }}>采购清单</div>
+                        <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: 'var(--color-text)' }}>按施工阶段管理采购事项</div>
+                        <div className="muted-text" style={{ fontSize: 13, marginTop: 6 }}>
+                            已采购 {purchasedCount} / {purchases.length} 项 · 当前阶段：{PHASE_LIST.find((item) => item.phase === currentPhase)?.name}
+                        </div>
                     </div>
+                    <Button fill="outline" shape="rounded" onClick={() => navigate(-1)}>
+                        返回
+                    </Button>
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--color-text-light)' }}>
-                    {purchases.filter(p => p.needMeasureFirst && !p.purchased).length} 项需提前量尺
-                </div>
-            </div>
 
-            <div style={{ padding: '0 12px 40px' }}>
                 {Array.from(grouped.entries()).map(([phase, items]) => {
-                    const phaseInfo = PHASE_LIST.find(p => p.phase === phase);
+                    const phaseInfo = PHASE_LIST.find((item) => item.phase === phase);
                     const isCurrent = currentPhase === phase;
-                    const unboughtCount = items.filter(i => !i.purchased).length;
+                    const pendingCount = items.filter((item) => !item.purchased).length;
 
                     return (
-                        <div key={phase} style={{ marginBottom: 20 }}>
-                            <div style={{
-                                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-                                padding: '8px 12px', background: isCurrent ? '#EEF2FF' : '#fff', borderRadius: 8,
-                            }}>
-                                <span style={{ fontSize: 18 }}>{phaseInfo?.icon}</span>
-                                <span style={{ fontWeight: 600, fontSize: 14 }}>{phaseInfo?.name}</span>
-                                {isCurrent && <Tag color="primary" fill="solid" style={{ fontSize: 10 }}>当前阶段</Tag>}
-                                {unboughtCount > 0 && (
-                                    <Badge content={unboughtCount} style={{ '--right': '-4px', '--top': '-4px' } as any} />
-                                )}
+                        <div key={phase} className="section-card">
+                            <div className="page-section-title">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                    <h3>{phaseInfo?.icon} {phaseInfo?.name}</h3>
+                                    {isCurrent && <Tag color="primary" fill="solid">当前阶段</Tag>}
+                                </div>
+                                {pendingCount > 0 ? <Badge content={pendingCount} /> : <span className="inline-pill">已完成</span>}
                             </div>
-
-                            {items.map(item => (
-                                <div key={item.id} style={{
-                                    background: '#fff',
-                                    borderRadius: 10,
-                                    padding: '12px 14px',
-                                    marginBottom: 8,
-                                    border: item.purchased ? '1px solid #D1FAE5' : '1px solid var(--color-border)',
-                                    opacity: item.purchased ? 0.7 : 1,
-                                }}>
-                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                                        <Checkbox
-                                            checked={item.purchased}
-                                            onChange={() => togglePurchase(item.id)}
-                                            style={{ flexShrink: 0, marginTop: 2 }}
-                                        />
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{
-                                                fontSize: 14, fontWeight: 500,
-                                                textDecoration: item.purchased ? 'line-through' : 'none',
-                                            }}>
-                                                {item.name}
-                                                {item.needMeasureFirst && (
-                                                    <Tag color="warning" fill="outline" style={{ fontSize: 10, marginLeft: 6 }}>需量尺</Tag>
-                                                )}
-                                            </div>
-                                            <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-                                                <div>⏰ {item.mustBuyBefore}</div>
-                                                <div>💰 预估：{item.estimatedBudget}</div>
-                                                <div>💡 {item.tips}</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                {items.map((item) => (
+                                    <div key={item.id} className="panel-card" style={{ padding: '14px 16px', opacity: item.purchased ? 0.72 : 1 }}>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                                            <Checkbox checked={item.purchased} onChange={() => togglePurchase(item.id)} />
+                                            <div style={{ flex: 1 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                    <div style={{ fontWeight: 700, color: 'var(--color-text)', textDecoration: item.purchased ? 'line-through' : 'none' }}>{item.name}</div>
+                                                    {item.needMeasureFirst && <Tag color="warning" fill="outline">先量尺</Tag>}
+                                                </div>
+                                                <div className="feature-desc" style={{ marginTop: 6 }}>
+                                                    <div>最晚购买节点：{item.mustBuyBefore}</div>
+                                                    <div>预算参考：{item.estimatedBudget}</div>
+                                                    <div>选购提示：{item.tips}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
                     );
                 })}

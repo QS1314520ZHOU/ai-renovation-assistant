@@ -97,6 +97,31 @@ export default function MaterialRecommendationModal({
                             <div style={{ fontSize: 12, color: '#059669', background: '#ECFDF5', padding: '8px', borderRadius: 8, marginTop: 8 }}>
                                 💡 <strong>推荐理由：</strong>{rec.reason}
                             </div>
+                            {(rec.product_image_url || rec.scene_image_url) && (
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 10 }}>
+                                    {rec.product_image_url && (
+                                        <img
+                                            src={rec.product_image_url}
+                                            alt={`${rec.brand} 产品图`}
+                                            style={{ width: '100%', height: 88, objectFit: 'cover', borderRadius: 8 }}
+                                        />
+                                    )}
+                                    {rec.scene_image_url && (
+                                        <img
+                                            src={rec.scene_image_url}
+                                            alt={`${rec.brand} 场景图`}
+                                            style={{ width: '100%', height: 88, objectFit: 'cover', borderRadius: 8 }}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                            {Array.isArray(rec.color_palette) && rec.color_palette.length > 0 && (
+                                <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                                    {rec.color_palette.slice(0, 6).map((color: string) => (
+                                        <div key={color} title={color} style={{ width: 18, height: 18, borderRadius: 999, background: color, border: '1px solid rgba(148,163,184,0.35)' }} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     ))}
 

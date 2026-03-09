@@ -10,6 +10,11 @@ import AppLayout from '@/components/Layout/AppLayout';
 const Login = lazy(() => import('@/pages/Login'));
 const Home = lazy(() => import('@/pages/Home'));
 const AIConsult = lazy(() => import('@/pages/AIConsult'));
+const AIDesign = lazy(() => import('@/pages/AIDesign'));
+const StyleQuiz = lazy(() => import('@/pages/StyleQuiz'));
+const Inspiration = lazy(() => import('@/pages/Inspiration'));
+const ARPreview = lazy(() => import('@/pages/ARPreview'));
+const VRTour = lazy(() => import('@/pages/VRTour'));
 const QuickBudget = lazy(() => import('@/pages/QuickBudget'));
 const BudgetResult = lazy(() => import('@/pages/BudgetResult'));
 const MissingCheck = lazy(() => import('@/pages/MissingCheck'));
@@ -28,8 +33,18 @@ const PostRenovation = lazy(() => import('@/pages/Construction/PostRenovation'))
 const AIInspect = lazy(() => import('@/pages/Construction/AIInspect'));
 
 const Fallback = () => (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Loading color="primary" />
+    <div
+        style={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            minHeight: '100vh',
+            background: 'var(--gradient-page)',
+        }}
+    >
+        <div className="glass-card" style={{ padding: '20px 24px' }}>
+            <Loading color="primary" />
+        </div>
     </div>
 );
 
@@ -55,6 +70,11 @@ const App: React.FC = () => {
 
                 <Route path="/" element={<ProtectedPage><Home /></ProtectedPage>} />
                 <Route path="/ai-consult" element={<ProtectedPage><AIConsult /></ProtectedPage>} />
+                <Route path="/ai-design" element={<ProtectedPage><AIDesign /></ProtectedPage>} />
+                <Route path="/style-quiz" element={<ProtectedPage><StyleQuiz /></ProtectedPage>} />
+                <Route path="/inspiration" element={<ProtectedPage><Inspiration /></ProtectedPage>} />
+                <Route path="/ar-preview" element={<ProtectedPage><ARPreview /></ProtectedPage>} />
+                <Route path="/vr-tour" element={<ProtectedPage><VRTour /></ProtectedPage>} />
                 <Route path="/quick-budget" element={<ProtectedPage><QuickBudget /></ProtectedPage>} />
                 <Route path="/budget-result" element={<ProtectedPage><BudgetResult /></ProtectedPage>} />
                 <Route path="/missing-check" element={<ProtectedPage><MissingCheck /></ProtectedPage>} />

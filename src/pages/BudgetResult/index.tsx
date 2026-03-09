@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Button, Collapse, DotLoading, Tabs, Tag, Toast } from 'antd-mobile'
+import { Button, Collapse, DotLoading, Image, Swiper, Tabs, Tag, Toast } from 'antd-mobile'
 import ReactECharts from 'echarts-for-react'
 
 import { useProjectStore } from '@/store'
+import { useDesignStore } from '@/store'
 import { useGlossaryStore } from '@/store/glossaryStore'
 import { BudgetResult as BudgetResultType, BudgetScheme, HouseProfile, TierLevel } from '@/types'
+import { STYLE_OPTIONS, StyleKey, getDesignInspirationsByTier } from '@/engine/designInspirationData'
 import { categoryLabel, formatArea, formatMoney, tierLevelLabel } from '@/utils/format'
 import TermItem from '@/components/Glossary/TermItem'
 import FeedbackWidget from '@/components/Feedback/FeedbackWidget'
@@ -52,8 +54,11 @@ function toProjectSnapshot(house: Partial<HouseProfile>): HouseProfile {
 export default function BudgetResult() {
     const navigate = useNavigate()
     const { budgetResult, currentHouse, saveProject } = useProjectStore()
+    const { preferredStyle } = useDesignStore()
     const { init: initGlossary } = useGlossaryStore()
     const [activeTier, setActiveTier] = useState<TierLevel>((currentHouse?.tierLevel as TierLevel) || 'standard')
+    const [styleFilter, setStyleFilter] = useState<StyleKey | 'all'>(preferredStyle || 'all')
+    const [activeCategory, setActiveCategory] = useState<string | null>(null)
 
     useEffect(() => {
         initGlossary()
@@ -104,6 +109,25 @@ export default function BudgetResult() {
 
     const topCategory = categoryTotals[0]
     const unitPrice = Math.round(Number(scheme.total_amount || 0) / Math.max(Number(house.innerArea || 1), 1))
+    const inspirations = useMemo(
+        () => getDesignInspirationsByTier(activeTier, 6, styleFilter),
+        [activeTier, styleFilter],
+    )
+
+    const tierCards = useMemo(() => {
+        const targetTiers: TierLevel[] = ['economy', 'standard', 'premium']
+        return targetTiers.map((tier) => {
+            const tierScheme = (budgetResult.schemes || []).find((item) => item.tier === tier)
+            const preview = getDesignInspirationsByTier(tier, 1, styleFilter)[0]
+            return {
+                tier,
+                amount: Number(tierScheme?.total_amount || 0),
+                image: preview?.imageUrl,
+                title: preview?.title || '风格参考',
+                desc: preview?.desc || '根据预算档次匹配效果图参考',
+            }
+        })
+    }, [budgetResult.schemes, styleFilter])
 
     const pieOption = {
         tooltip: { trigger: 'item', formatter: '{b}<br/>{c} 元 ({d}%)' },
@@ -119,6 +143,12 @@ export default function BudgetResult() {
                 data: categoryTotals.map((item) => ({ name: item.label, value: item.total })),
             },
         ],
+    }
+    const pieEvents = {
+        click: (params: any) => {
+            const found = categoryTotals.find((item) => item.label === params?.name)
+            setActiveCategory(found?.category || null)
+        },
     }
 
     const saveCurrentProject = () => {
@@ -173,6 +203,44 @@ export default function BudgetResult() {
                     </Tabs>
                 </div>
 
+                <div className="section-card">
+                    <div className="page-section-title">
+                        <h3>三档预算对比</h3>
+                        <span className="inline-pill">左右滑动查看</span>
+                    </div>
+                    <Swiper
+                        indicator={(total, current) => (
+                            <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--color-text-light)' }}>
+                                {current + 1}/{total}
+                            </div>
+                        )}
+                    >
+                        {tierCards.map((card) => (
+                            <Swiper.Item key={card.tier}>
+                                <div
+                                    className="panel-card"
+                                    style={{ display: 'grid', gridTemplateColumns: '96px 1fr', gap: 12, alignItems: 'center', cursor: 'pointer' }}
+                                    onClick={() => setActiveTier(card.tier)}
+                                >
+                                    {card.image && (
+                                        <Image src={card.image} width={96} height={96} fit="cover" style={{ borderRadius: 12 }} />
+                                    )}
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <Tag color={activeTier === card.tier ? 'primary' : 'default'} fill={activeTier === card.tier ? 'solid' : 'outline'}>
+                                                {tierLevelLabel(card.tier)}
+                                            </Tag>
+                                            <span style={{ fontSize: 16, fontWeight: 800 }}>{formatMoney(card.amount)}</span>
+                                        </div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, marginTop: 6 }}>{card.title}</div>
+                                        <div className="feature-desc">{card.desc}</div>
+                                    </div>
+                                </div>
+                            </Swiper.Item>
+                        ))}
+                    </Swiper>
+                </div>
+
                 <div className="metric-grid">
                     <div className="metric-card">
                         <div className="metric-label">材料费</div>
@@ -194,9 +262,69 @@ export default function BudgetResult() {
                 <div className="section-card">
                     <div className="page-section-title">
                         <h3>预算结构</h3>
-                        <span className="inline-pill">分类占比</span>
+                        <span className="inline-pill">分类占比（可点击扇区筛选明细）</span>
                     </div>
-                    <ReactECharts option={pieOption} style={{ height: 280 }} />
+                    <ReactECharts option={pieOption} style={{ height: 280 }} onEvents={pieEvents} />
+                    {activeCategory && (
+                        <div className="action-row" style={{ marginTop: 12 }}>
+                            <Tag color="primary" fill="outline">当前筛选：{categoryLabel(activeCategory)}</Tag>
+                            <Button size="small" fill="outline" onClick={() => setActiveCategory(null)}>
+                                清除筛选
+                            </Button>
+                        </div>
+                    )}
+                </div>
+
+                <div className="section-card">
+                    <div className="page-section-title">
+                        <h3>风格参考图</h3>
+                        <span className="inline-pill">{tierLevelLabel(activeTier)} · 视觉灵感</span>
+                    </div>
+                    <div className="muted-text" style={{ fontSize: 13, marginBottom: 12 }}>
+                        当前按预算档次给你匹配了一组参考效果图，后续可以升级为“上传你家实拍图 → AI 生成改造效果”。
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                        <Tag color={styleFilter === 'all' ? 'primary' : 'default'} fill={styleFilter === 'all' ? 'solid' : 'outline'} onClick={() => setStyleFilter('all')}>
+                            全部风格
+                        </Tag>
+                        {STYLE_OPTIONS.map((item) => (
+                            <Tag
+                                key={item.key}
+                                color={styleFilter === item.key ? 'primary' : 'default'}
+                                fill={styleFilter === item.key ? 'solid' : 'outline'}
+                                onClick={() => setStyleFilter(item.key)}
+                            >
+                                {item.label}
+                            </Tag>
+                        ))}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
+                        {inspirations.map((item) => (
+                            <div key={item.id} className="panel-card" style={{ padding: 10 }}>
+                                <Image
+                                    src={item.imageUrl}
+                                    width="100%"
+                                    height={120}
+                                    fit="cover"
+                                    style={{ borderRadius: 12 }}
+                                />
+                                <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    <Tag color="primary" fill="outline" style={{ fontSize: 10 }}>{item.style}</Tag>
+                                    <Tag fill="outline" style={{ fontSize: 10 }}>{item.roomType}</Tag>
+                                </div>
+                                <div style={{ marginTop: 8, fontSize: 14, fontWeight: 700, color: 'var(--color-text)' }}>{item.title}</div>
+                                <div className="feature-desc" style={{ marginTop: 4 }}>{item.desc}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="action-row" style={{ marginTop: 12 }}>
+                        <Button block fill="outline" shape="rounded" onClick={() => navigate('/inspiration')}>
+                            进入灵感瀑布流
+                        </Button>
+                        <Button block color="primary" shape="rounded" onClick={() => navigate('/ai-design')}>
+                            上传实拍生成效果图
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="section-card">
@@ -216,23 +344,26 @@ export default function BudgetResult() {
                                 }
                             >
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    {scheme.items.filter((item) => item.category === category.category).map((item) => (
-                                        <div key={item.id} className="panel-card" style={{ padding: '14px 16px' }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                                                <div style={{ flex: 1 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                                        <span style={{ fontWeight: 700, color: 'var(--color-text)' }}><TermItem name={item.item_name} /></span>
-                                                        <Tag color="primary" fill="outline" style={{ fontSize: 10 }}>{item.unit}</Tag>
+                                    {scheme.items
+                                        .filter((item) => item.category === category.category)
+                                        .filter((item) => !activeCategory || item.category === activeCategory)
+                                        .map((item) => (
+                                            <div key={item.id} className="panel-card" style={{ padding: '14px 16px' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                                                    <div style={{ flex: 1 }}>
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                            <span style={{ fontWeight: 700, color: 'var(--color-text)' }}><TermItem name={item.item_name} /></span>
+                                                            <Tag color="primary" fill="outline" style={{ fontSize: 10 }}>{item.unit}</Tag>
+                                                        </div>
+                                                        <div className="feature-desc" style={{ marginTop: 6 }}>
+                                                            {item.quantity}{item.unit} × {formatMoney(Number(item.material_unit_price || 0) + Number(item.labor_unit_price || 0) + Number(item.accessory_unit_price || 0))}/{item.unit}
+                                                        </div>
                                                     </div>
-                                                    <div className="feature-desc" style={{ marginTop: 6 }}>
-                                                        {item.quantity}{item.unit} × {formatMoney(Number(item.material_unit_price || 0) + Number(item.labor_unit_price || 0) + Number(item.accessory_unit_price || 0))}/{item.unit}
+                                                    <div style={{ fontWeight: 800, color: 'var(--color-text)', flexShrink: 0, textAlign: 'right' }}>
+                                                        {formatMoney(Number(item.subtotal || 0))}
                                                     </div>
-                                                </div>
-                                                <div style={{ fontWeight: 800, color: 'var(--color-text)', flexShrink: 0, textAlign: 'right' }}>
-                                                    {formatMoney(Number(item.subtotal || 0))}
                                                 </div>
                                             </div>
-                                        </div>
                                     ))}
                                 </div>
                             </Collapse.Panel>

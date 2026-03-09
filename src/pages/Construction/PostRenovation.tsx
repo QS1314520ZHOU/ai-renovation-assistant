@@ -1,28 +1,29 @@
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NavBar, Card, Button, Tag, Toast } from 'antd-mobile';
+import { Button, Tag, Toast } from 'antd-mobile';
+import dayjs from 'dayjs';
 import { useConstructionStore, useProjectStore } from '@/store';
 import { formatMoney } from '@/utils/format';
-import dayjs from 'dayjs';
 
 const WARRANTY_ITEMS = [
-    { name: '防水工程', period: '5年', checkPoints: ['卫生间天花板是否有水渍', '墙面是否起皮/发霉'] },
-    { name: '水电隐蔽工程', period: '5年', checkPoints: ['是否有跳闸', '水管是否渗漏', '水压是否正常'] },
-    { name: '墙面乳胶漆', period: '2年', checkPoints: ['是否有裂缝', '是否有掉皮/起泡'] },
-    { name: '瓷砖工程', period: '2年', checkPoints: ['是否有空鼓脱落', '勾缝是否完好'] },
-    { name: '木工/吊顶', period: '2年', checkPoints: ['石膏板接缝是否开裂', '龙骨是否松动'] },
-    { name: '门窗五金', period: '1年', checkPoints: ['铰链是否松动', '锁具是否灵活'] },
+    { name: '防水工程', period: '5 年', checkPoints: ['是否渗漏返潮', '闭水记录保留'] },
+    { name: '水电隐蔽工程', period: '5 年', checkPoints: ['开关插座稳定', '水路无渗漏', '强弱电安全'] },
+    { name: '墙地砖铺贴', period: '2 年', checkPoints: ['是否空鼓', '勾缝是否开裂'] },
+    { name: '木作工程', period: '2 年', checkPoints: ['柜门变形松动', '五金是否异响'] },
+    { name: '门窗 / 五金', period: '2 年', checkPoints: ['开合是否顺畅', '密封条老化'] },
+    { name: '油漆工程', period: '1 年', checkPoints: ['墙面起皮开裂', '色差是否明显'] },
 ];
 
 const MOVE_IN_CHECKLIST = [
-    { name: '甲醛检测', desc: '建议通风至少3个月后做一次甲醛检测，确保达标后再入住', done: false },
-    { name: '全屋通电测试', desc: '入住前再次逐一测试所有开关插座', done: false },
-    { name: '水管排查', desc: '打开所有水龙头、冲马桶，检查有无渗漏', done: false },
-    { name: '门窗密封', desc: '检查所有门窗开关是否顺畅、密封条是否完好', done: false },
-    { name: '地漏排水', desc: '向每个地漏灌水，检查排水是否顺畅', done: false },
-    { name: '保留施工资料', desc: '水电走向图、竣工照片、合同保修卡要妥善保管', done: false },
-    { name: '保留剩余材料', desc: '留少量瓷砖、乳胶漆（同批次），方便后期修补', done: false },
-    { name: '与施工方确认维保', desc: '确认维保期限、联系方式、响应时间', done: false },
+    { name: '空气检测', desc: '建议通风满 3 个月后再检测甲醛、TVOC 等指标' },
+    { name: '深度保洁', desc: '清除粉尘和胶渍，重点处理柜体内部和边角' },
+    { name: '水电复查', desc: '检查插座、灯具、龙头、地漏是否运行正常' },
+    { name: '家具进场', desc: '先大件后小件，避免反复搬运磕碰墙面' },
+    { name: '家电安装', desc: '确认尺寸和预留点位，安装后做通电测试' },
+    { name: '软装布置', desc: '窗帘、地毯、挂画分批进场，避免一次堆放' },
+    { name: '质保资料整理', desc: '收集合同、发票、保修单并拍照留存云端' },
+    { name: '入住复盘记录', desc: '记录 1-2 周居住问题，便于集中整改' },
 ];
 
 export default function PostRenovation() {
@@ -31,97 +32,84 @@ export default function PostRenovation() {
     const { currentHouse } = useProjectStore();
 
     const totalSpent = getTotalSpent();
-    const endDate = phases.find((p: any) => p.phase === 'completed')?.endDate;
+    const endDate = phases.find((item: any) => item.phase === 'completed')?.endDate;
     const totalDays = startDate && endDate ? dayjs(endDate).diff(dayjs(startDate), 'day') : 0;
 
     return (
-        <div style={{ background: 'var(--color-bg)', minHeight: '100vh' }}>
-            <NavBar onBack={() => navigate(-1)} style={{ background: '#fff' }}>
-                装修总结与维保
-            </NavBar>
+        <div className="page-shell page-shell--no-tabbar">
+            <div className="page-stack">
+                <div className="page-topbar">
+                    <div>
+                        <div className="page-kicker" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#047857' }}>竣工收尾</div>
+                        <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: 'var(--color-text)' }}>交付后仍要关注这些事项</div>
+                    </div>
+                    <Button fill="outline" shape="rounded" onClick={() => navigate(-1)}>
+                        返回
+                    </Button>
+                </div>
 
-            {/* 装修总结卡片 */}
-            <div style={{
-                margin: 12, padding: 20,
-                background: 'linear-gradient(135deg, #059669, #10B981)',
-                borderRadius: 16, color: '#fff',
-            }}>
-                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>🎉 恭喜装修完成！</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                    <div>
-                        <div style={{ fontSize: 11, opacity: 0.8 }}>总工期</div>
-                        <div style={{ fontSize: 22, fontWeight: 700 }}>{totalDays}天</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: 11, opacity: 0.8 }}>实际花费</div>
-                        <div style={{ fontSize: 22, fontWeight: 700 }}>{formatMoney(totalSpent)}</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: 11, opacity: 0.8 }}>预算目标</div>
-                        <div style={{ fontSize: 16, fontWeight: 600 }}>{formatMoney(currentHouse?.targetBudget || 0)}</div>
-                    </div>
-                    <div>
-                        <div style={{ fontSize: 11, opacity: 0.8 }}>预算偏差</div>
-                        <div style={{ fontSize: 16, fontWeight: 600 }}>
-                            {currentHouse?.targetBudget
-                                ? `${totalSpent > currentHouse.targetBudget ? '+' : ''}${formatMoney(totalSpent - currentHouse.targetBudget)}`
-                                : '-'
-                            }
+                <div className="page-hero page-hero--emerald">
+                    <div className="page-kicker">完工总结</div>
+                    <div className="page-title" style={{ marginTop: 16 }}>复盘周期、花费与入住准备</div>
+                    <div className="stats-grid" style={{ marginTop: 18 }}>
+                        <div className="metric-card" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                            <div className="metric-label" style={{ color: 'rgba(255,255,255,0.72)' }}>总工期</div>
+                            <div className="metric-value" style={{ marginTop: 8, color: '#fff', fontSize: 26 }}>{totalDays || '-'} 天</div>
+                        </div>
+                        <div className="metric-card" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                            <div className="metric-label" style={{ color: 'rgba(255,255,255,0.72)' }}>总花费</div>
+                            <div className="metric-value" style={{ marginTop: 8, color: '#fff', fontSize: 26 }}>{formatMoney(totalSpent)}</div>
+                        </div>
+                        <div className="metric-card" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                            <div className="metric-label" style={{ color: 'rgba(255,255,255,0.72)' }}>预算偏差</div>
+                            <div className="metric-value" style={{ marginTop: 8, color: '#fff', fontSize: 26 }}>
+                                {currentHouse?.targetBudget ? `${totalSpent > currentHouse.targetBudget ? '+' : ''}${formatMoney(totalSpent - currentHouse.targetBudget)}` : '-'}
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            {/* 入住前检查清单 */}
-            <div style={{ margin: '0 12px 16px', padding: 16, background: '#fff', borderRadius: 12 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>🏡 入住前必做清单</h3>
-                {MOVE_IN_CHECKLIST.map((item, idx) => (
-                    <div key={idx} style={{
-                        padding: '10px 0',
-                        borderBottom: idx < MOVE_IN_CHECKLIST.length - 1 ? '1px solid #F3F4F6' : 'none',
-                    }}>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{item.name}</div>
-                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.5 }}>
-                            {item.desc}
-                        </div>
+                <div className="section-card">
+                    <div className="page-section-title">
+                        <h3>入住前检查清单</h3>
+                        <span className="inline-pill">建议逐项确认</span>
                     </div>
-                ))}
-            </div>
-
-            {/* 维保提醒 */}
-            <div style={{ margin: '0 12px 16px', padding: 16, background: '#fff', borderRadius: 12 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>🛡️ 维保期关注事项</h3>
-                <p style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12, lineHeight: 1.5 }}>
-                    以下是各项目常见保修期限和需要定期检查的点，发现问题及时联系施工方处理。
-                </p>
-                {WARRANTY_ITEMS.map((item, idx) => (
-                    <div key={idx} style={{
-                        padding: '12px',
-                        background: '#F9FAFB',
-                        borderRadius: 10,
-                        marginBottom: 8,
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <span style={{ fontSize: 14, fontWeight: 600 }}>{item.name}</span>
-                            <Tag color="primary" fill="outline" style={{ fontSize: 11 }}>保修{item.period}</Tag>
-                        </div>
-                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>
-                            定期检查：{item.checkPoints.join('；')}
-                        </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {MOVE_IN_CHECKLIST.map((item) => (
+                            <div key={item.name} className="panel-card" style={{ padding: '14px 16px' }}>
+                                <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{item.name}</div>
+                                <div className="feature-desc" style={{ marginTop: 6 }}>{item.desc}</div>
+                            </div>
+                        ))}
                     </div>
-                ))}
-            </div>
+                </div>
 
-            {/* 导出归档 */}
-            <div style={{ padding: '0 12px 40px' }}>
-                <Button block color="primary" size="large" shape="rounded" style={{ marginBottom: 10, height: 48 }}
-                    onClick={() => { Toast.show({ content: '项目资料已归档保存', icon: 'success' }); }}>
-                    📦 归档项目资料
-                </Button>
-                <Button block fill="outline" size="large" shape="rounded" style={{ height: 48 }}
-                    onClick={() => { Toast.show({ content: '报告已导出', icon: 'success' }); }}>
-                    📄 导出装修总结报告
-                </Button>
+                <div className="section-card">
+                    <div className="page-section-title">
+                        <h3>保修维保提醒</h3>
+                        <span className="inline-pill">按周期回访</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {WARRANTY_ITEMS.map((item) => (
+                            <div key={item.name} className="panel-card" style={{ padding: '14px 16px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                                    <div style={{ fontWeight: 700, color: 'var(--color-text)' }}>{item.name}</div>
+                                    <Tag color="primary" fill="outline">保修 {item.period}</Tag>
+                                </div>
+                                <div className="feature-desc" style={{ marginTop: 8 }}>重点检查：{item.checkPoints.join('、')}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="action-row">
+                    <Button color="primary" shape="rounded" onClick={() => { Toast.show({ content: '竣工清单导出中...', icon: 'success' }); }}>
+                        导出竣工清单
+                    </Button>
+                    <Button fill="outline" shape="rounded" onClick={() => { Toast.show({ content: '维保提醒已生成', icon: 'success' }); }}>
+                        生成维保提醒
+                    </Button>
+                </div>
             </div>
         </div>
     );
