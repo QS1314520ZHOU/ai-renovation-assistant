@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import logging
 import re
@@ -35,6 +36,16 @@ MATERIAL_KEYWORDS: dict[str, list[str]] = {
     "SI_CUSTOM_WARDROBE": ["定制柜", "全屋定制", "衣柜", "颗粒板", "多层实木板"],
     "SI_SANITARY": ["马桶", "花洒套装", "浴室柜"],
 }
+
+SOURCE_LABELS: dict[str, str] = {
+    "zjtcn_info_price": "造价通信息价",
+    "zjtcn_ref_price": "造价通参考价",
+    "gov_pdf": "政府造价PDF",
+    "user_quote": "用户上传报价",
+    "ecommerce_ai": "电商AI估算",
+}
+
+AI_ESTIMATED_SOURCES = {"ecommerce_ai"}
 
 
 class PriceSyncService:
@@ -170,39 +181,38 @@ class PriceSyncService:
                 resp.raise_for_status()
                 pdf_bytes = resp.content
 
-            pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
             ai_client = await AIClientFactory.get_client(self.db)
             ai_config = await AIClientFactory.get_config(self.db)
+            payload: Any = None
+            parse_mode = "pdfplumber_text"
+            extracted_text = self._extract_pdf_text(pdf_bytes)
+            condensed_text = self._condense_gov_pdf_text(extracted_text)
 
-            prompt = (
-                "请从这份建设工程造价信息文档中提取装修相关材料价格。\n"
-                "只提取类别：瓷砖、乳胶漆、防水涂料、木地板、石膏板、水泥、河沙、管材线缆。\n"
-                "输出 JSON 数组，字段为 name/spec/unit/price/price_type。"
-                "price_type 只允许 material 或 labor，只输出 JSON。"
-            )
+            if condensed_text:
+                prompt = (
+                    "你是造价数据结构化助手。请从下方文本中提取装修相关材料价格。\n"
+                    "只提取类别：瓷砖、乳胶漆、防水涂料、木地板、石膏板、水泥、河沙、管材线缆。\n"
+                    "输出 JSON 数组，字段为 name/spec/unit/price/price_type。\n"
+                    "price_type 只允许 material 或 labor。只输出 JSON，不要解释。\n\n"
+                    f"文本内容如下：\n{condensed_text}"
+                )
+                response = await ai_client.chat.completions.create(
+                    model=ai_config["model"],
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.1,
+                    max_tokens=4000,
+                )
+                raw_text = self._normalize_ai_content(response.choices[0].message.content)
+                payload = self._extract_json_payload(raw_text)
 
-            response = await ai_client.chat.completions.create(
-                model=ai_config["model"],
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:application/pdf;base64,{pdf_b64}"
-                                },
-                            },
-                        ],
-                    }
-                ],
-                temperature=0.1,
-                max_tokens=4000,
-            )
+            if not isinstance(payload, list):
+                parse_mode = "multimodal_pdf_fallback"
+                payload = await self._extract_gov_pdf_with_multimodal(
+                    ai_client=ai_client,
+                    model_name=ai_config["model"],
+                    pdf_bytes=pdf_bytes,
+                )
 
-            raw_text = self._normalize_ai_content(response.choices[0].message.content)
-            payload = self._extract_json_payload(raw_text)
             if not isinstance(payload, list):
                 logger.warning("gov pdf parse got invalid payload: %s", type(payload))
                 return 0
@@ -214,6 +224,11 @@ class PriceSyncService:
                 if price <= 0:
                     continue
                 name = str(item.get("name") or "")
+                item_payload = dict(item)
+                item_payload["_meta"] = {
+                    "parse_mode": parse_mode,
+                    "source_label": SOURCE_LABELS.get("gov_pdf", "政府造价PDF"),
+                }
                 self.db.add(
                     PriceSnapshot(
                         source="gov_pdf",
@@ -225,7 +240,7 @@ class PriceSyncService:
                         raw_price=price,
                         price_type=str(item.get("price_type") or "material"),
                         snapshot_date=snapshot_date,
-                        raw_json=item,
+                        raw_json=item_payload,
                     )
                 )
                 count += 1
@@ -306,18 +321,25 @@ class PriceSyncService:
                         if raw <= 0:
                             continue
                         converted = float(query["convert"](raw))
+                        payload_with_meta = dict(payload)
+                        payload_with_meta["_meta"] = {
+                            "is_ai_estimated": True,
+                            "source_label": SOURCE_LABELS.get("ecommerce_ai", "电商AI估算"),
+                            "price_level": level,
+                            "query_keyword": keyword,
+                        }
                         self.db.add(
                             PriceSnapshot(
                                 source="ecommerce_ai",
                                 city_code=city_code,
                                 standard_item_code=std_code,
                                 raw_material_name=keyword,
-                                raw_spec=f"price_level={level}",
+                                raw_spec=f"price_level={level};ai_estimated=true",
                                 raw_unit=str(query["unit"]),
                                 raw_price=round(converted, 2),
                                 price_type="material",
                                 snapshot_date=date.today(),
-                                raw_json=payload,
+                                raw_json=payload_with_meta,
                             )
                         )
                         count += 1
@@ -698,6 +720,95 @@ class PriceSyncService:
                         parts.append(str(text))
             return "\n".join(parts)
         return str(content or "")
+
+    async def _extract_gov_pdf_with_multimodal(
+        self,
+        ai_client: Any,
+        model_name: str,
+        pdf_bytes: bytes,
+    ) -> Any:
+        pdf_b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+        prompt = (
+            "请从这份建设工程造价信息文档中提取装修相关材料价格。\n"
+            "只提取类别：瓷砖、乳胶漆、防水涂料、木地板、石膏板、水泥、河沙、管材线缆。\n"
+            "输出 JSON 数组，字段为 name/spec/unit/price/price_type。"
+            "price_type 只允许 material 或 labor，只输出 JSON。"
+        )
+        response = await ai_client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:application/pdf;base64,{pdf_b64}"},
+                        },
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=4000,
+        )
+        raw_text = self._normalize_ai_content(response.choices[0].message.content)
+        return self._extract_json_payload(raw_text)
+
+    def _extract_pdf_text(self, pdf_bytes: bytes) -> str:
+        if not pdf_bytes:
+            return ""
+        try:
+            import pdfplumber
+        except Exception as exc:
+            logger.warning("pdfplumber not available, fallback to multimodal parse: %s", exc)
+            return ""
+
+        text_parts: list[str] = []
+        try:
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text() or ""
+                    if page_text.strip():
+                        text_parts.append(page_text)
+
+                    tables = page.extract_tables() or []
+                    for table in tables:
+                        for row in table or []:
+                            if not row:
+                                continue
+                            cells = [str(cell).strip() for cell in row if cell is not None]
+                            if cells:
+                                text_parts.append(" | ".join(cells))
+        except Exception as exc:
+            logger.warning("pdf text extraction failed: %s", exc)
+            return ""
+
+        return "\n".join(text_parts)
+
+    def _condense_gov_pdf_text(self, text: str, max_chars: int = 14000) -> str:
+        if not text:
+            return ""
+
+        keyword_pattern = re.compile(
+            r"(瓷砖|乳胶漆|防水|地板|石膏板|水泥|河沙|管材|线缆|人工|单价|综合价|信息价|规格|单位|元)"
+        )
+        price_pattern = re.compile(r"\d+(\.\d+)?")
+
+        selected_lines: list[str] = []
+        for line in text.splitlines():
+            normalized = line.strip()
+            if not normalized:
+                continue
+            if keyword_pattern.search(normalized) and price_pattern.search(normalized):
+                selected_lines.append(normalized)
+
+        if not selected_lines:
+            selected_lines = [line.strip() for line in text.splitlines() if line.strip()]
+
+        condensed = "\n".join(selected_lines)
+        if len(condensed) <= max_chars:
+            return condensed
+        return condensed[:max_chars]
 
     def _to_float(self, value: Any) -> float:
         if value is None:

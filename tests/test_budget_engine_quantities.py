@@ -27,16 +27,38 @@ def rooms() -> list[dict]:
     [
         ("SI_HYDRO_ELECTRIC", 96.0, 96.0),
         ("SI_FLOOR_TILE", 96.0, 36.0),
+        ("SI_FLOOR_TILE_MAT", 96.0, 36.0),
         ("SI_FLOOR_WOOD", 96.0, 16.0),
         ("SI_WALL_PAINT", 96.0, 100.0),
         ("SI_WALL_TILE", 96.0, 36.0),
+        ("SI_WALL_TILE_MAT", 96.0, 36.0),
         ("SI_WATERPROOF", 96.0, 12.0),
+        ("SI_CEILING_LIVING", 96.0, 19.2),
+        ("SI_CEILING_KW", 96.0, 12.0),
+        ("SI_ELEC_BOX", 96.0, 2.0),
         ("SI_DOOR", 96.0, 3.0),
+        ("SI_THRESHOLD", 96.0, 3.0),
+        ("SI_BASEBOARD", 96.0, 24.917141),
+        ("SI_SWITCH_SOCKET", 96.0, 38.4),
+        ("SI_LIGHT", 96.0, 6.0),
+        ("SI_SANITARY", 96.0, 1.0),
+        ("SI_CLEANING", 96.0, 96.0),
+        ("SI_GARBAGE", 96.0, 96.0),
+        ("SI_DEMOLITION", 96.0, 14.4),
+        ("SI_CABINET_KITCHEN", 96.0, 4.2),
+        ("SI_CUSTOM_WARDROBE", 96.0, 3.52),
     ],
 )
 def test_calculate_quantity(service: BudgetEngineService, rooms: list[dict], code: str, inner_area: float, expected: float) -> None:
     result = service._calculate_quantity(code, rooms, inner_area)
     assert math.isclose(result, expected, rel_tol=1e-6, abs_tol=1e-6)
+
+
+def test_calculate_quantity_unknown_code_returns_zero(
+    service: BudgetEngineService,
+    rooms: list[dict],
+) -> None:
+    assert service._calculate_quantity("SI_UNKNOWN_ITEM", rooms, 96.0) == 0.0
 
 
 def test_calc_one_tier(service: BudgetEngineService, rooms: list[dict]) -> None:

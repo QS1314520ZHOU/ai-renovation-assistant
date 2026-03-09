@@ -301,8 +301,12 @@ class AIService:
                 break
 
             if not kept and estimated_tokens > max_tokens:
-                truncate_chars = max_tokens * 4
-                kept.append({"role": message["role"], "content": content[-truncate_chars:]})
+                kept.append(
+                    {
+                        "role": message["role"],
+                        "content": self._trim_text_to_token_budget(content, max_tokens),
+                    }
+                )
                 break
 
             kept.append({"role": message["role"], "content": content})
@@ -313,7 +317,28 @@ class AIService:
     def _estimate_tokens(self, text: str) -> int:
         if not text:
             return 0
-        return max(1, len(text) // 4)
+
+        chinese_chars = sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff")
+        other_chars = len(text) - chinese_chars
+        return max(1, int(chinese_chars * 1.5 + other_chars * 0.25))
+
+    def _trim_text_to_token_budget(self, text: str, token_budget: int) -> str:
+        if not text or token_budget <= 0:
+            return ""
+
+        used_tokens = 0.0
+        kept_chars: list[str] = []
+        for ch in reversed(text):
+            token_cost = 1.5 if "\u4e00" <= ch <= "\u9fff" else 0.25
+            if kept_chars and used_tokens + token_cost > token_budget:
+                break
+            if not kept_chars and token_cost > token_budget:
+                kept_chars.append(ch)
+                break
+            kept_chars.append(ch)
+            used_tokens += token_cost
+
+        return "".join(reversed(kept_chars))
 
     async def _complete_with_fallback(
         self,
@@ -511,20 +536,34 @@ class AIService:
             "简约", "奶油", "北欧", "中式", "轻奢", "美式",
         )
 
-        has_budget_strong = any(keyword in text for keyword in budget_strong_keywords)
-        has_budget_info = any(keyword in text for keyword in budget_info_keywords)
-        has_coach = any(keyword in text for keyword in coach_keywords)
-        has_freeqa = any(keyword in text for keyword in freeqa_keywords)
+        budget_strong_hits = [keyword for keyword in budget_strong_keywords if keyword in text]
+        budget_info_hits = [keyword for keyword in budget_info_keywords if keyword in text]
+        coach_hits = [keyword for keyword in coach_keywords if keyword in text]
+        freeqa_hits = [keyword for keyword in freeqa_keywords if keyword in text]
 
-        if has_budget_strong:
-            return "budget"
-        if has_coach:
-            return "coach"
-        if has_freeqa:
-            return "freeqa"
-        if has_budget_info:
-            return "budget"
-        return "budget"
+        if budget_strong_hits:
+            routed = "budget"
+        elif coach_hits:
+            routed = "coach"
+        elif freeqa_hits:
+            routed = "freeqa"
+        elif budget_info_hits:
+            routed = "budget"
+        else:
+            routed = "budget"
+
+        logger.info(
+            "AI intent routed=%s hits=%s",
+            routed,
+            {
+                "budget_strong": budget_strong_hits,
+                "budget_info": budget_info_hits,
+                "coach": coach_hits,
+                "freeqa": freeqa_hits,
+                "message_length": len(text),
+            },
+        )
+        return routed
 
     def _parse_extracted(self, reply: str) -> tuple[dict[str, Any], bool, list[str]]:
         match = re.search(r"```json\s*(\{.*?\})\s*```", reply, re.DOTALL)

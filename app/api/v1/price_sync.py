@@ -9,7 +9,11 @@ from app.database import get_db
 from app.dependencies import get_admin_user
 from app.models.price_snapshot import PriceAdjustmentSuggestion, PriceSnapshot
 from app.schemas.common import ApiResponse
-from app.services.price_sync_service import PriceSyncService
+from app.services.price_sync_service import (
+    AI_ESTIMATED_SOURCES,
+    SOURCE_LABELS,
+    PriceSyncService,
+)
 
 router = APIRouter()
 
@@ -45,6 +49,8 @@ async def list_snapshots(
             {
                 "id": str(item.id),
                 "source": item.source,
+                "source_label": SOURCE_LABELS.get(item.source, item.source),
+                "is_ai_estimated": item.source in AI_ESTIMATED_SOURCES,
                 "standard_item_code": item.standard_item_code,
                 "raw_material_name": item.raw_material_name,
                 "raw_price": float(item.raw_price),
@@ -73,7 +79,13 @@ async def snapshot_stats(
         .group_by(PriceSnapshot.source)
     )
     stats = [
-        {"source": row.source, "count": int(row.count), "latest": str(row.latest)}
+        {
+            "source": row.source,
+            "source_label": SOURCE_LABELS.get(row.source, row.source),
+            "is_ai_estimated": row.source in AI_ESTIMATED_SOURCES,
+            "count": int(row.count),
+            "latest": str(row.latest),
+        }
         for row in rows.all()
     ]
     return ApiResponse(data=stats)

@@ -15,6 +15,7 @@ def service() -> AIService:
         ("厨房防水做完后闭水试验多久合适", "coach"),
         ("现代简约和奶油风哪个更适合小户型", "freeqa"),
         ("先帮我大概估个装修费用", "budget"),
+        ("我家厨房想做个好一点的灶台，大概要花多少钱", "budget"),
     ],
 )
 def test_classify_intent(service: AIService, message: str, expected: str) -> None:
@@ -37,3 +38,16 @@ def test_resolve_session_type_keeps_previous_type(service: AIService) -> None:
         previous_type="freeqa",
     )
     assert resolved == "freeqa"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("", 0),
+        ("abc", 1),
+        ("装修预算", 6),
+        ("装修 budget 2026", 6),
+    ],
+)
+def test_estimate_tokens(service: AIService, text: str, expected: int) -> None:
+    assert service._estimate_tokens(text) == expected

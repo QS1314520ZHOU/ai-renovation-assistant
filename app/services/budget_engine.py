@@ -410,33 +410,94 @@ class BudgetEngineService:
         return 'paint'
 
     def _calculate_quantity(self, code: str, rooms: list[dict[str, Any]], inner_area: float) -> float:
+        def room_area(room: dict[str, Any]) -> float:
+            value = float(room.get('area') or 0)
+            return value if value > 0 else 0.0
+
+        tile_floor_area = sum(room_area(room) for room in rooms if room.get('floor_material') == 'tile')
+        wood_floor_area = sum(room_area(room) for room in rooms if room.get('floor_material') == 'wood')
+        paint_wall_area = sum(room_area(room) for room in rooms if room.get('wall_material') == 'paint')
+        tile_wall_area = sum(room_area(room) for room in rooms if room.get('wall_material') == 'tile')
+        kitchen_area = sum(room_area(room) for room in rooms if room.get('room_type') == 'kitchen')
+        kitchen_bath_area = sum(
+            room_area(room)
+            for room in rooms
+            if room.get('room_type') in {'kitchen', 'bathroom'}
+        )
+
         if code == 'SI_HYDRO_ELECTRIC':
             return inner_area
         if code == 'SI_FLOOR_TILE':
-            return sum(room['area'] for room in rooms if room.get('floor_material') == 'tile')
+            return tile_floor_area
+        if code == 'SI_FLOOR_TILE_MAT':
+            return tile_floor_area
         if code == 'SI_FLOOR_WOOD':
-            return sum(room['area'] for room in rooms if room.get('floor_material') == 'wood')
+            return wood_floor_area
         if code == 'SI_WALL_PAINT':
-            return sum(room['area'] for room in rooms if room.get('wall_material') == 'paint') * 2.5
+            return paint_wall_area * 2.5
         if code == 'SI_WALL_TILE':
-            return sum(room['area'] for room in rooms if room.get('wall_material') == 'tile') * 3.0
+            return tile_wall_area * 3.0
+        if code == 'SI_WALL_TILE_MAT':
+            return tile_wall_area * 3.0
         if code == 'SI_WATERPROOF':
-            return sum(room['area'] for room in rooms if room['room_type'] in {'kitchen', 'bathroom', 'balcony'})
-        if code == 'SI_CEILING':
-            return sum(room['area'] for room in rooms if room['room_type'] in {'living', 'dining'}) * 0.8
+            return sum(
+                room_area(room)
+                for room in rooms
+                if room.get('room_type') in {'kitchen', 'bathroom', 'balcony'}
+            )
+        if code == 'SI_CEILING_LIVING':
+            return sum(
+                room_area(room)
+                for room in rooms
+                if room.get('room_type') in {'living', 'dining'}
+            ) * 0.8
+        if code == 'SI_CEILING_KW':
+            return kitchen_bath_area
+        if code == 'SI_ELEC_BOX':
+            return 2.0
         if code == 'SI_DOOR':
-            return sum(room.get('door_count', 1) for room in rooms if room['room_type'] != 'living')
+            return float(
+                sum(
+                    int(room.get('door_count') or 1)
+                    for room in rooms
+                    if room.get('room_type') != 'living'
+                )
+            )
+        if code == 'SI_THRESHOLD':
+            return float(
+                sum(
+                    int(room.get('door_count') or 0)
+                    for room in rooms
+                    if room.get('room_type') != 'living'
+                )
+            )
+        if code == 'SI_BASEBOARD':
+            perimeter_rooms = (
+                room
+                for room in rooms
+                if room.get('room_type') not in {'kitchen', 'bathroom', 'balcony'}
+            )
+            return sum((room_area(room) ** 0.5) * 4 * 0.7 for room in perimeter_rooms)
         if code == 'SI_DEMOLITION':
             return inner_area * 0.15
         if code == 'SI_CUSTOM_CABINET':
-            return inner_area * 0.18
+            return max(3.2, kitchen_area * 0.6)
         if code == 'SI_CUSTOM_WARDROBE':
-            bedroom_area = sum(room['area'] for room in rooms if room['room_type'] == 'bedroom')
+            bedroom_area = sum(room_area(room) for room in rooms if room.get('room_type') == 'bedroom')
             return bedroom_area * 0.22
         if code == 'SI_CABINET_KITCHEN':
-            kitchen_area = sum(room['area'] for room in rooms if room['room_type'] == 'kitchen')
             return max(3.2, kitchen_area * 0.6)
-        return inner_area
+        if code == 'SI_SWITCH_SOCKET':
+            return max(20.0, inner_area * 0.4)
+        if code == 'SI_LIGHT':
+            return float(len(rooms) + 2)
+        if code == 'SI_SANITARY':
+            return float(sum(1 for room in rooms if room.get('room_type') == 'bathroom'))
+        if code == 'SI_CLEANING':
+            return inner_area
+        if code == 'SI_GARBAGE':
+            return inner_area
+        return 0.0
 
     def _calc_one_tier(
         self,
