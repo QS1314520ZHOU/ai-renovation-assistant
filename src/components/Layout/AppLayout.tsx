@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { TabBar } from 'antd-mobile';
+import { TabBar, Badge } from 'antd-mobile';
 import {
     AppOutline,
     CalculatorOutline,
@@ -9,16 +9,28 @@ import {
     SetOutline,
     BellOutline,
 } from 'antd-mobile-icons';
+
 import { useAuthStore, useNotificationStore } from '@/store';
-import { Badge, Button } from 'antd-mobile';
 import { NotificationCenter } from '@/components/NotificationCenter';
 
 const allTabs = [
     { key: '/', title: '首页', icon: <AppOutline /> },
-    { key: '/ai-consult', title: 'AI问诊', icon: <CalculatorOutline /> },
-    { key: '/construction', title: '施工陪跑', icon: <CheckShieldOutline /> },
-    { key: '/glossary', title: '装修词典', icon: <InformationCircleOutline /> },
+    { key: '/ai-consult', title: 'AI咨询', icon: <CalculatorOutline /> },
+    { key: '/construction', title: '施工跟踪', icon: <CheckShieldOutline /> },
+    { key: '/glossary', title: '术语百科', icon: <InformationCircleOutline /> },
     { key: '/settings', title: '设置', icon: <SetOutline />, isAdmin: true },
+];
+
+const HIDE_TABBAR_PATHS = [
+    '/budget-result',
+    '/missing-check',
+    '/quick-budget',
+    '/quote-check',
+    '/construction/checklist',
+    '/construction/purchases',
+    '/construction/log',
+    '/construction/payments',
+    '/construction/post',
 ];
 
 export default function AppLayout({ children }: { children?: React.ReactNode }) {
@@ -27,52 +39,25 @@ export default function AppLayout({ children }: { children?: React.ReactNode }) 
     const { role } = useAuthStore();
     const { notifications } = useNotificationStore();
     const [showNotify, setShowNotify] = React.useState(false);
-    const unreadCount = notifications.filter(n => !n.read).length;
 
-    // 根据角色过滤 Tab
-    const tabs = allTabs.filter(tab => !tab.isAdmin || role === 'admin');
+    const unreadCount = notifications.filter((item) => !item.read).length;
+    const tabs = allTabs.filter((tab) => !tab.isAdmin || role === 'admin');
 
-    // 匹配当前 tab
-    const activeKey = tabs.find(t => t.key !== '/' && location.pathname.startsWith(t.key))?.key
+    const activeKey = tabs.find((tab) => tab.key !== '/' && location.pathname.startsWith(tab.key))?.key
         || (location.pathname === '/' ? '/' : '');
 
-    // 这些子页面不显示 TabBar
-    const hideTabBar = [
-        '/budget-result', '/missing-check', '/quick-budget', '/quote-check',
-        '/construction/checklist', '/construction/purchases',
-        '/construction/log', '/construction/payments', '/construction/post',
-    ].some(path => location.pathname.startsWith(path));
+    const hideTabBar = HIDE_TABBAR_PATHS.some((path) => location.pathname.startsWith(path));
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', position: 'relative' }}>
-            <div style={{ flex: 1, overflow: 'auto', paddingBottom: hideTabBar ? 0 : 50 }}>
+        <div className="app-shell">
+            <div className={`app-content ${hideTabBar ? '' : 'app-content--with-tabbar'}`}>
                 {children || <Outlet />}
             </div>
 
-            {/* 通知铃铛 */}
             {!hideTabBar && (
-                <div style={{
-                    position: 'fixed',
-                    right: 16,
-                    bottom: 70,
-                    zIndex: 99,
-                }}>
+                <div className="app-fab-shell">
                     <Badge content={unreadCount > 0 ? unreadCount : null}>
-                        <div
-                            onClick={() => setShowNotify(true)}
-                            style={{
-                                width: 44,
-                                height: 44,
-                                borderRadius: '50%',
-                                background: '#fff',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                                color: 'var(--color-primary)',
-                                fontSize: 24
-                            }}
-                        >
+                        <div className="app-fab" onClick={() => setShowNotify(true)}>
                             <BellOutline />
                         </div>
                     </Badge>
@@ -80,23 +65,15 @@ export default function AppLayout({ children }: { children?: React.ReactNode }) 
             )}
 
             <NotificationCenter visible={showNotify} onClose={() => setShowNotify(false)} />
+
             {!hideTabBar && (
-                <div style={{
-                    position: 'fixed',
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    background: '#fff',
-                    borderTop: '1px solid var(--color-border)',
-                    paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-                    zIndex: 100,
-                }}>
+                <div className="app-tabbar-shell">
                     <TabBar
                         activeKey={activeKey}
                         onChange={(key) => navigate(key)}
                         style={{ '--adm-tab-bar-active-color': 'var(--color-primary)' } as any}
                     >
-                        {tabs.map(tab => (
+                        {tabs.map((tab) => (
                             <TabBar.Item key={tab.key} icon={tab.icon} title={tab.title} />
                         ))}
                     </TabBar>
