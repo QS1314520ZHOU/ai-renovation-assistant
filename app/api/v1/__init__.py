@@ -1,1 +1,15 @@
-from app.api.v1 import auth, projects, houses, budgets, ai, construction, glossary, quotes, config
+from app.api.v1 import (
+    ai,
+    auth,
+    budgets,
+    config,
+    contracts,
+    construction,
+    design,
+    glossary,
+    houses,
+    materials,
+    price_sync,
+    projects,
+    quotes,
+)

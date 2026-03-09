@@ -17,6 +17,7 @@ from app.models.construction import (
 from app.models.glossary import GlossaryTerm
 from app.models.feedback import UserFeedback
 from app.models.config import SystemConfig
+from app.models.price_snapshot import PriceSnapshot, PriceAdjustmentSuggestion
 
 __all__ = [
     "Base",
@@ -34,4 +35,5 @@ __all__ = [
     "GlossaryTerm",
     "UserFeedback",
     "SystemConfig",
+    "PriceSnapshot", "PriceAdjustmentSuggestion",
 ]
