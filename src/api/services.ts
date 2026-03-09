@@ -92,6 +92,7 @@ export const budgetApi = {
 // ---- AI 问诊 ----
 export interface AIChatResult {
     session_id: string;
+    session_type: string;
     reply: string;
     extracted_fields: Record<string, any> | null;
     is_complete: boolean;
@@ -125,6 +126,60 @@ export const aiApi = {
     }
 };
 
+// ---- AI 效果图 ----
+export interface DesignOption {
+    label: string;
+    value: string;
+}
+
+export interface DesignGenerateResult {
+    source_image_url: string;
+    generated_image_url: string;
+    style: string;
+    room_type: string;
+    provider: string;
+    is_mock: boolean;
+    note?: string;
+    prompt?: string;
+    control_mode: string;
+    strength: number;
+    seed?: number;
+    preferences: Record<string, any>;
+}
+
+export const designApi = {
+    getOptions: () =>
+        http.get<{ styles: DesignOption[]; room_types: DesignOption[] }>('/design/styles'),
+
+    generate: (data: {
+        file: File;
+        style: string;
+        room_type: string;
+        preferences?: Record<string, any>;
+        control_mode?: 'none' | 'canny' | 'depth' | 'mlsd';
+        strength?: number;
+        seed?: number;
+    }) => {
+        const formData = new FormData();
+        formData.append('file', data.file);
+        formData.append('style', data.style);
+        formData.append('room_type', data.room_type);
+        if (data.preferences) {
+            formData.append('preferences', JSON.stringify(data.preferences));
+        }
+        if (data.control_mode) {
+            formData.append('control_mode', data.control_mode);
+        }
+        if (typeof data.strength === 'number') {
+            formData.append('strength', String(data.strength));
+        }
+        if (typeof data.seed === 'number') {
+            formData.append('seed', String(data.seed));
+        }
+        return http.post<DesignGenerateResult>('/design/generate', formData);
+    },
+};
+
 // ---- 词典 ----
 export const glossaryApi = {
     list: (keyword?: string, category?: string) => {
@@ -138,6 +193,9 @@ export const glossaryApi = {
 
 // ---- 施工 ----
 export const constructionApi = {
+    bootstrap: (projectId: string, data: any) =>
+        http.post<any>(`/construction/${projectId}/bootstrap`, data),
+
     getPhases: (projectId: string) =>
         http.get<any[]>(`/construction/${projectId}/phases`),
 
@@ -154,7 +212,19 @@ export const constructionApi = {
         http.post(`/construction/${projectId}/payments`, data),
 
     getPayments: (projectId: string) =>
-        http.get<any[]>(`/payments/${projectId}`),
+        http.get<any[]>(`/construction/${projectId}/payments`),
+
+    getChecklists: (projectId: string) =>
+        http.get<any[]>(`/construction/${projectId}/checklists`),
+
+    updateChecklist: (projectId: string, data: any) =>
+        http.put<any>(`/construction/${projectId}/checklists`, data),
+
+    getPurchases: (projectId: string) =>
+        http.get<any[]>(`/construction/${projectId}/purchases`),
+
+    updatePurchase: (projectId: string, data: any) =>
+        http.put<any>(`/construction/${projectId}/purchases`, data),
 };
 
 // ---- 报价体检 ----

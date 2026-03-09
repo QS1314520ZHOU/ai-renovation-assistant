@@ -1,15 +1,15 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { NavBar, Button, Form, Input, Picker, Toast, Empty, Tag, Switch } from 'antd-mobile';
+import { Button, Form, Input, Picker, Toast, Empty, Tag, Switch } from 'antd-mobile';
+import dayjs from 'dayjs';
 import { useConstructionStore, useProjectStore } from '@/store';
 import { PHASE_LIST } from '@/engine/constructionData';
 import { formatMoney } from '@/utils/format';
-import dayjs from 'dayjs';
 
-const phaseOptions = [PHASE_LIST.filter(p => p.phase !== 'warranty').map(p => ({
-    label: `${p.icon} ${p.name}`,
-    value: p.phase,
-}))];
+const phaseOptions = [
+    PHASE_LIST.filter((item) => item.phase !== 'warranty').map((item) => ({ label: `${item.icon} ${item.name}`, value: item.phase })),
+];
 
 export default function Payments() {
     const navigate = useNavigate();
@@ -27,160 +27,145 @@ export default function Payments() {
 
     const sortedPayments = [...payments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     const totalSpent = getTotalSpent();
+    const addonSpent = payments.filter((item) => item.isAddon).reduce((sum, item) => sum + item.amount, 0);
+    const phaseSpending = PHASE_LIST.map((item) => ({
+        ...item,
+        spent: payments.filter((payment) => payment.phase === item.phase).reduce((sum, payment) => sum + payment.amount, 0),
+    })).filter((item) => item.spent > 0);
 
-    // 按阶段分组统计
-    const phaseSpending = PHASE_LIST.map(p => ({
-        ...p,
-        spent: payments.filter(pay => pay.phase === p.phase).reduce((s, pay) => s + pay.amount, 0),
-    })).filter(p => p.spent > 0);
-
-    // 增项统计
-    const addonSpent = payments.filter(pay => pay.isAddon).reduce((s, pay) => s + pay.amount, 0);
-
-    const handleSubmit = () => {
-        const amount = parseFloat(form.amount);
+    const handleSubmit = async () => {
+        const amount = Number(form.amount);
         if (!amount || amount <= 0) {
             Toast.show({ content: '请输入有效金额', icon: 'fail' });
             return;
         }
-        addPayment({
-            phase: form.phase as any,
-            amount,
-            description: form.description || '装修付款',
-            payee: form.payee || '施工方',
-            paymentMethod: '',
-            date: dayjs().format('YYYY-MM-DD'),
-            isAddon: form.isAddon,
-            addonReason: form.addonReason,
-        } as any);
-        setForm({ amount: '', description: '', payee: '', phase: currentPhase, isAddon: false, addonReason: '' });
-        setShowForm(false);
-        Toast.show({ content: '付款记录已添加', icon: 'success' });
+
+        try {
+            await addPayment({
+                phase: form.phase as any,
+                amount,
+                description: form.description || '阶段付款',
+                payee: form.payee || '未填写收款方',
+                paymentMethod: '',
+                date: dayjs().format('YYYY-MM-DD'),
+                isAddon: form.isAddon,
+                addonReason: form.addonReason,
+            } as any);
+
+            setForm({ amount: '', description: '', payee: '', phase: currentPhase, isAddon: false, addonReason: '' });
+            setShowForm(false);
+            Toast.show({ content: '付款记录已添加', icon: 'success' });
+        } catch (error: any) {
+            Toast.show({ content: `付款保存失败：${error.message || ''}`, icon: 'fail' });
+        }
     };
 
     return (
-        <div style={{ background: 'var(--color-bg)', minHeight: '100vh' }}>
-            <NavBar
-                onBack={() => navigate(-1)}
-                style={{ background: '#fff' }}
-                right={
-                    <Button size="mini" color="primary" fill="solid" onClick={() => setShowForm(true)}>
-                        + 记录
-                    </Button>
-                }
-            >
-                付款记录
-            </NavBar>
-
-            {/* 总览 */}
-            <div style={{
-                margin: 12, padding: 16,
-                background: 'linear-gradient(135deg, #4F46E5, #7C3AED)',
-                borderRadius: 12, color: '#fff',
-            }}>
-                <div style={{ fontSize: 13, opacity: 0.9 }}>累计已支出</div>
-                <div style={{ fontSize: 28, fontWeight: 700, marginTop: 4 }}>{formatMoney(totalSpent)}</div>
-                {currentHouse?.targetBudget && (
-                    <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>
-                        目标预算 {formatMoney(currentHouse.targetBudget)} · 剩余 {formatMoney(Math.max(0, currentHouse.targetBudget - totalSpent))}
+        <div className="page-shell page-shell--no-tabbar">
+            <div className="page-stack">
+                <div className="page-topbar">
+                    <div>
+                        <div className="page-kicker" style={{ background: 'rgba(99, 102, 241, 0.10)', color: 'var(--color-primary)' }}>付款记录</div>
+                        <div style={{ marginTop: 10, fontSize: 22, fontWeight: 800, color: 'var(--color-text)' }}>掌握装修支出节奏</div>
+                        <div className="muted-text" style={{ fontSize: 13, marginTop: 6 }}>记录每笔付款并追踪增项情况</div>
                     </div>
-                )}
-                {addonSpent > 0 && (
-                    <div style={{
-                        marginTop: 12, background: 'rgba(255,255,255,0.2)', padding: '6px 10px',
-                        borderRadius: 6, fontSize: 12, display: 'inline-block'
-                    }}>
-                        ⚠️ 包含意外增项支出: {formatMoney(addonSpent)}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                        <Button size="small" fill="outline" onClick={() => navigate(-1)}>返回</Button>
+                        <Button size="small" color="primary" onClick={() => setShowForm((prev) => !prev)}>{showForm ? '收起' : '新增'}</Button>
                     </div>
-                )}
-            </div>
+                </div>
 
-            {/* 阶段支出占比 */}
-            {phaseSpending.length > 0 && (
-                <div style={{ margin: '0 12px 12px', padding: 14, background: '#fff', borderRadius: 12 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>各阶段支出</div>
-                    {phaseSpending.map(p => (
-                        <div key={p.phase} style={{
-                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '6px 0', borderBottom: '1px solid #F3F4F6',
-                        }}>
-                            <span style={{ fontSize: 13 }}>{p.icon} {p.name}</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-primary)' }}>{formatMoney(p.spent)}</span>
+                <div className="page-hero page-hero--indigo">
+                    <div className="page-kicker">累计支出</div>
+                    <div className="page-title" style={{ marginTop: 16 }}>{formatMoney(totalSpent)}</div>
+                    <div className="page-subtitle" style={{ marginTop: 10 }}>
+                        目标预算 {currentHouse?.targetBudget ? formatMoney(currentHouse.targetBudget) : '未填写'}
+                        {currentHouse?.targetBudget ? ` · 剩余 ${formatMoney(Math.max(0, currentHouse.targetBudget - totalSpent))}` : ''}
+                    </div>
+                    {addonSpent > 0 && (
+                        <div style={{ marginTop: 14 }} className="page-kicker">其中增项：{formatMoney(addonSpent)}</div>
+                    )}
+                </div>
+
+                {phaseSpending.length > 0 && (
+                    <div className="section-card">
+                        <div className="page-section-title">
+                            <h3>阶段支出</h3>
+                            <span className="inline-pill">按节点统计</span>
                         </div>
-                    ))}
-                </div>
-            )}
-
-            {/* 新增表单 */}
-            {showForm && (
-                <div style={{ margin: 12, padding: 16, background: '#fff', borderRadius: 12 }}>
-                    <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>💰 新增付款记录</h3>
-                    <Form layout="vertical">
-                        <Form.Item label="金额（元）">
-                            <Input type="number" placeholder="如：15000" value={form.amount}
-                                onChange={v => setForm(f => ({ ...f, amount: v }))} />
-                        </Form.Item>
-                        <Form.Item label="说明">
-                            <Input placeholder="如：水电改造首期款" value={form.description}
-                                onChange={v => setForm(f => ({ ...f, description: v }))} />
-                        </Form.Item>
-                        <Form.Item label="支付对象">
-                            <Input placeholder="如：XX装修公司" value={form.payee}
-                                onChange={v => setForm(f => ({ ...f, payee: v }))} />
-                        </Form.Item>
-                        <Form.Item label="是否属于额外增项？" extra={<Switch checked={form.isAddon} onChange={v => setForm(f => ({ ...f, isAddon: v }))} />} />
-                        {form.isAddon && (
-                            <Form.Item label="增项原因">
-                                <Input placeholder="如：拆旧发现墙体开裂需修补" value={form.addonReason}
-                                    onChange={v => setForm(f => ({ ...f, addonReason: v }))} />
-                            </Form.Item>
-                        )}
-                        <Form.Item label="所属阶段">
-                            <Picker
-                                columns={phaseOptions}
-                                value={[form.phase]}
-                                onConfirm={v => setForm(f => ({ ...f, phase: v[0] as any }))}
-                            >
-                                {(_, { open }) => (
-                                    <div onClick={open}>
-                                        {PHASE_LIST.find(p => p.phase === form.phase)?.name || '选择阶段'}
-                                    </div>
-                                )}
-                            </Picker>
-                        </Form.Item>
-                    </Form>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                        <Button block fill="outline" onClick={() => setShowForm(false)}>取消</Button>
-                        <Button block color="primary" onClick={handleSubmit}>保存</Button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {phaseSpending.map((item) => (
+                                <div key={item.phase} className="panel-card" style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>{item.icon} {item.name}</div>
+                                    <div style={{ fontWeight: 700, color: 'var(--color-primary)' }}>{formatMoney(item.spent)}</div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* 付款明细 */}
-            <div style={{ padding: '0 12px 40px' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10, paddingLeft: 4 }}>付款明细</h3>
+                {showForm && (
+                    <div className="section-card">
+                        <div className="page-section-title">
+                            <h3>新增付款记录</h3>
+                            <span className="inline-pill">支持增项标记</span>
+                        </div>
+                        <Form layout="vertical">
+                            <Form.Item label="付款金额">
+                                <Input type="number" placeholder="例如：15000" value={form.amount} onChange={(value) => setForm((prev) => ({ ...prev, amount: value }))} clearable />
+                            </Form.Item>
+                            <Form.Item label="说明">
+                                <Input placeholder="例如：水电阶段首付款" value={form.description} onChange={(value) => setForm((prev) => ({ ...prev, description: value }))} clearable />
+                            </Form.Item>
+                            <Form.Item label="收款方">
+                                <Input placeholder="例如：XX 装修公司" value={form.payee} onChange={(value) => setForm((prev) => ({ ...prev, payee: value }))} clearable />
+                            </Form.Item>
+                            <Form.Item label="所属阶段">
+                                <Picker columns={phaseOptions} value={[form.phase]} onConfirm={(value) => setForm((prev) => ({ ...prev, phase: value[0] as any }))}>
+                                    {(_, { open }) => (
+                                        <div className="panel-card" style={{ padding: '12px 14px', cursor: 'pointer' }} onClick={open}>
+                                            {PHASE_LIST.find((item) => item.phase === form.phase)?.name || '未选择阶段'}
+                                        </div>
+                                    )}
+                                </Picker>
+                            </Form.Item>
+                            <Form.Item label="是否增项">
+                                <Switch checked={form.isAddon} onChange={(value) => setForm((prev) => ({ ...prev, isAddon: value }))} />
+                            </Form.Item>
+                            {form.isAddon && (
+                                <Form.Item label="增项原因">
+                                    <Input placeholder="请填写增项原因，如现场改动、材料升级等" value={form.addonReason} onChange={(value) => setForm((prev) => ({ ...prev, addonReason: value }))} clearable />
+                                </Form.Item>
+                            )}
+                        </Form>
+                        <div className="action-row">
+                            <Button fill="outline" shape="rounded" onClick={() => setShowForm(false)}>取消</Button>
+                            <Button color="primary" shape="rounded" onClick={handleSubmit}>保存</Button>
+                        </div>
+                    </div>
+                )}
+
                 {sortedPayments.length === 0 ? (
-                    <Empty description="暂无付款记录" />
+                    <div className="empty-card">
+                        <div className="empty-title">暂无付款记录</div>
+                        <div className="empty-desc">先添加首笔款项，后续系统会自动累计并给出预算预警。</div>
+                    </div>
                 ) : (
-                    sortedPayments.map(p => {
-                        const phaseInfo = PHASE_LIST.find(ph => ph.phase === p.phase);
+                    sortedPayments.map((payment) => {
+                        const phaseInfo = PHASE_LIST.find((item) => item.phase === payment.phase);
                         return (
-                            <div key={p.id} style={{
-                                background: '#fff', borderRadius: 10, padding: '12px 14px', marginBottom: 8,
-                                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            }}>
-                                <div>
-                                    <div style={{ fontSize: 14, fontWeight: 500 }}>{p.description}</div>
-                                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 4, display: 'flex', gap: 6, alignItems: 'center' }}>
-                                        <Tag style={{ fontSize: 10 }}>{phaseInfo?.icon} {phaseInfo?.name}</Tag>
-                                        {p.isAddon && <Tag color="warning" style={{ fontSize: 10 }}>⚠️ 增项</Tag>}
-                                        <span>{p.payee}</span>
-                                        <span>{dayjs(p.date).format('MM-DD')}</span>
-                                    </div>
+                            <div key={payment.id} className="section-card">
+                                <div className="page-section-title" style={{ marginBottom: 8 }}>
+                                    <h3>{payment.description}</h3>
+                                    <div style={{ fontWeight: 800, color: '#ef4444' }}>-{formatMoney(payment.amount)}</div>
                                 </div>
-                                <div style={{ fontSize: 16, fontWeight: 700, color: '#EF4444', whiteSpace: 'nowrap' }}>
-                                    -{formatMoney(p.amount)}
+                                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                    <Tag fill="outline">{phaseInfo?.icon} {phaseInfo?.name}</Tag>
+                                    <Tag fill="outline">{payment.payee}</Tag>
+                                    <Tag fill="outline">{payment.date}</Tag>
+                                    {payment.isAddon && <Tag color="warning" fill="outline">增项</Tag>}
                                 </div>
+                                {payment.addonReason && <div className="feature-desc" style={{ marginTop: 10 }}>增项原因：{payment.addonReason}</div>}
                             </div>
                         );
                     })
